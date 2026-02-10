@@ -2,6 +2,12 @@
 
 A compact research-oriented implementation for unsupervised graph clustering with edge-enhanced learning.
 
+## Upstream DSE Reference
+- DSE repository: https://github.com/RiemannGraph/DSE_clustering
+- DSE/IsoSEL paper (arXiv:2504.09970v2): https://arxiv.org/abs/2504.09970
+- Local paper copy used in this repo: `reference/2504.09970v2.pdf`
+Note: the paper introduces the ASIL framework with LSEnet under the structural-entropy clustering line, which this repo builds upon.
+
 ## Data And Artifact Policy
 - Large datasets and heavy experiment artifacts are **not tracked in Git**.
 - Only lightweight manifests are kept:
@@ -9,6 +15,36 @@ A compact research-oriented implementation for unsupervised graph clustering wit
   - `Exp/README.md`
 - For full packages, keep cloud links in those manifest files.
 - Runtime behavior: missing benchmark datasets are auto-downloaded by PyG loaders under `--root_path data`.
+
+## What Makes DSE Different (No Predefined K)
+Unlike many deep graph clustering pipelines that rely on a final k-means stage with a user-provided cluster number, DSE models clustering as structural-information minimization on a partitioning tree:
+- It introduces **Differentiable Structural Information (DSI)**, turning discrete structural entropy into a gradient-trainable objective.
+- The DSI objective is theoretically connected to clustering quality by bounding graph conductance.
+- Clustering is decoded from the learned partitioning tree, so it does **not require fixing k-means cluster count K** as an external input.
+- The paper also highlights robustness on imbalanced graphs by showing minority-cluster identifiability under the structural-entropy objective.
+
+In short: DSE is a structural-entropy-driven clustering framework, not a "learn embedding -> run k-means(K)" pipeline.
+
+## How This Repo Extends DSE With Edge Features
+This project keeps DSE's partition-tree core and adds an edge-enhanced path to better exploit pairwise node relations:
+- `V2/V3/V4`: structural, feature, and hybrid edge priors.
+- `V5`: injects edge priors at assignment-score stage (middle fusion), instead of hard early concatenation.
+- `A2` preset: keeps strong edge contribution with scheduled fusion strength for better stability.
+
+Conceptually, this aligns with the paper's two-view idea (structure + representation):  
+we preserve the structural-information objective while adding controllable edge-feature signals to improve assignment quality and robustness.
+
+## Paper Principle -> This Repo Mapping
+From `reference/2504.09970v2.pdf`, the core method logic can be read as:
+1. Structural entropy is made differentiable (DSI), so partition-tree learning becomes end-to-end trainable.
+2. DSI minimization is tied to graph conductance, giving a clustering objective without predefined `K`.
+3. Hyperbolic partition-tree learning (Lorentz model) captures hierarchical graph organization.
+4. Augmented structural entropy fuses structural and representational signals with scalable complexity.
+
+This repo maps these ideas to practice by keeping DSE's tree-based objective and adding edge-aware fusion (`V5/A2`) so node assignment leverages:
+- graph topology consistency,
+- node-feature similarity on edges,
+- and scheduled reliability-controlled edge contribution.
 
 ## Deployment
 ### 1) Create environment
