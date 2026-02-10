@@ -196,6 +196,74 @@ The tables below summarize completed runs. Full logs/results are hosted external
 - **Round B (A2-focused expansion)**: `240/240` runs, larger A2 variant search.
 - **Round C (causal stage analysis)**: `225/225` runs, phase-level verification.
 
+### Quick Reproduction By Section
+The commands below are organized to match the experiment sections in this README.
+
+Round A (same-batch style, quick):
+```bash
+# Baseline vs A2 on 5 datasets x 3 seeds (close to Table 1/2 core comparison)
+python3 tools/compare_baseline_vs_a2.py \
+  --datasets cora,citeseer,pubmed,computers,photo \
+  --seeds 3,4,5 \
+  --gpu 0 \
+  --out_csv results/round_a_baseline_vs_a2.csv
+```
+
+Round A (add V5 middle-fusion reference runs):
+```bash
+for d in cora citeseer pubmed computers photo; do
+  for s in 3 4 5; do
+    python3 tools/run_preset.py --preset baseline_v1 --dataset "$d" --seed "$s" --gpu 0 --version roundA_baseline_"$d"_s"$s"
+    python3 tools/run_preset.py --preset v5_mid_adaptive_u2 --dataset "$d" --seed "$s" --gpu 0 --version roundA_v5_u2_"$d"_s"$s"
+    python3 tools/run_preset.py --preset a2_u2_no_adapt --dataset "$d" --seed "$s" --gpu 0 --version roundA_a2_"$d"_s"$s"
+  done
+done
+```
+
+Round B (A2-focused expansion, quick sweep template):
+```bash
+# Example: end=1.6, sched=60, rel_temp=1.0 (Table 3 style variant)
+for d in cora citeseer pubmed computers photo; do
+  case "$d" in
+    cora) MAX_NUMS=10 ;;
+    citeseer) MAX_NUMS=9 ;;
+    pubmed) MAX_NUMS=5 ;;
+    computers) MAX_NUMS=12 ;;
+    photo) MAX_NUMS=10 ;;
+  esac
+  for s in 3 4 5; do
+    python3 main.py \
+      --dataset "$d" --root_path data --seed "$s" --gpu 0 \
+      --max_nums "$MAX_NUMS" --epochs 180 --eval_freq 20 --train_log_interval 20 \
+      --version roundB_a2_end16_sched60_"$d"_s"$s" \
+      --edge_variant V5 --edge_hybrid_alpha 0.7 --edge_feat_temp 1.0 \
+      --edge_fusion_gamma 1.0 --edge_fusion_gamma_start 0.2 --edge_fusion_gamma_end 1.6 --edge_fusion_gamma_sched_epochs 60 \
+      --edge_confidence_quantile 0.0 --edge_adaptive_alpha_strength 1.0 --edge_adaptive_alpha_bias 2.0 --edge_reliability_temp 1.0
+  done
+done
+```
+
+Round C (causal-stage style, quick triad):
+```bash
+# Run baseline / V5 / A2 on key datasets
+for d in citeseer cora pubmed; do
+  for s in 0 1 2; do
+    python3 tools/run_preset.py --preset baseline_v1 --dataset "$d" --seed "$s" --gpu 0 --version roundC_baseline_"$d"_s"$s"
+    python3 tools/run_preset.py --preset v5_mid_adaptive_u2 --dataset "$d" --seed "$s" --gpu 0 --version roundC_v5_u2_"$d"_s"$s"
+    python3 tools/run_preset.py --preset a2_u2_no_adapt --dataset "$d" --seed "$s" --gpu 0 --version roundC_a2_"$d"_s"$s"
+  done
+done
+```
+
+Full historical table reproduction:
+```bash
+# Requires archived suite scripts/log packs restored from cloud links in Exp/README.md
+# Example expected scripts:
+#   Exp/scripts/run_dse_u2_multiround_suite.py
+#   Exp/scripts/run_dse_a2_exploration_suite.py
+#   Exp/scripts/run_causal_edge_injection_suite.py
+```
+
 Robust score used in ranking:
 
 `robust_score = mean_delta_nmi + 0.25 * win_rate - 0.5 * tail_risk`
