@@ -24,7 +24,7 @@ parser = argparse.ArgumentParser(description='Lorentz Structural Entropy')
 parser.add_argument('--dataset', type=str, default='KarateClub')
 parser.add_argument('--task', type=str, default='Clustering',
                     choices=['Clustering'])
-parser.add_argument('--root_path', type=str, default='datasets')
+parser.add_argument('--root_path', type=str, default='data')
 parser.add_argument('--eval_freq', type=int, default=10)
 parser.add_argument('--exp_iters', type=int, default=5)
 parser.add_argument('--version', type=str, default="run")

@@ -145,7 +145,6 @@ python3 tools/compare_baseline_vs_a2.py --datasets cora,citeseer,pubmed --seeds 
 ```text
 edge-enhanced-unsupervised-graph-neural-network-clustering/
   data/                 # archived datasets used in previous runs
-  datasets -> data      # compatibility symlink
   Exp/                  # archived experiment scripts + logs + historical results
     scripts/
     bench_logs/
