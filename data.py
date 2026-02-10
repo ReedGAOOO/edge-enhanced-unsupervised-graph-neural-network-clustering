@@ -1,5 +1,6 @@
 import torch
 import networkx as nx
+from pathlib import Path
 from torch_geometric.data import Dataset, Data
 from torch_geometric.data.data import BaseData
 from torch_geometric.datasets import (Amazon, KarateClub, Planetoid, WebKB, Coauthor)
@@ -27,6 +28,15 @@ def build_feature_edge_weight(x, edge_index, temp=1.0):
     return torch.sigmoid(cos / temp)
 
 
+def has_ats_style_files(root, name):
+    base = Path(root) / name
+    return (
+        (base / f"{name}_adj.npy").exists()
+        and (base / f"{name}_feat.npy").exists()
+        and (base / f"{name}_label.npy").exists()
+    )
+
+
 def load_data(configs):
     dataset = None
     name = configs.dataset
@@ -44,10 +54,17 @@ def load_data(configs):
         dataset = KarateClub()
     elif name == 'FootBall':
         dataset = Football()
-    elif name in ['eat', 'bat', 'uat']:
+    elif name in ['eat', 'bat', 'uat'] or has_ats_style_files(configs.root_path, name):
         dataset = ATsDataset(root=configs.root_path, name=name)
     elif name in ['Cornell', 'Texas', 'Wisconsin']:
         dataset = WebKB(root=configs.root_path, name=name)
+    if dataset is None:
+        raise ValueError(
+            f"Unsupported dataset '{name}'. Built-ins: "
+            "cora/citeseer/pubmed/computers/photo/coauthorcs/coauthorphysics/KarateClub/FootBall/"
+            "Cornell/Texas/Wisconsin, or custom ATS-style files under "
+            f"'{configs.root_path}/{name}/' with {name}_adj.npy, {name}_feat.npy, {name}_label.npy."
+        )
     data = dataset[0].clone()
     N = data.x.shape[0]
     variant = str(getattr(configs, 'edge_variant', 'V1')).upper()
@@ -128,9 +145,21 @@ class ATsDataset(Dataset):
         feat = np.load(f'{root}/{name}/{name}_feat.npy')
         label = np.load(f'{root}/{name}/{name}_label.npy')
 
+        if adj.ndim != 2 or adj.shape[0] != adj.shape[1]:
+            raise ValueError(f"{name}_adj.npy must be a square [N, N] matrix, got {adj.shape}")
+        if feat.ndim != 2:
+            raise ValueError(f"{name}_feat.npy must be [N, F], got {feat.shape}")
+        if label.ndim != 1:
+            raise ValueError(f"{name}_label.npy must be [N], got {label.shape}")
+        if not (adj.shape[0] == feat.shape[0] == label.shape[0]):
+            raise ValueError(
+                f"Node count mismatch in ATS-style dataset '{name}': "
+                f"adj={adj.shape[0]}, feat={feat.shape[0]}, label={label.shape[0]}"
+            )
+
         self.num_nodes = feat.shape[0]
         x = torch.tensor(feat).float()
-        y = list(label)
+        y = torch.tensor(label).long()
         edge_index = adjacency2index(torch.tensor(adj))
         data = Data(x=x, edge_index=edge_index, y=y)
         self.data = data

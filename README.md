@@ -10,6 +10,85 @@ A compact research-oriented implementation for unsupervised graph clustering wit
 - For full packages, keep cloud links in those manifest files.
 - Runtime behavior: missing benchmark datasets are auto-downloaded by PyG loaders under `--root_path data`.
 
+## Deployment
+### 1) Create environment
+```bash
+cd /path/to/edge-enhanced-unsupervised-graph-neural-network-clustering
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install torch -r requirements.txt
+```
+
+### 2) Quick sanity check
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+python tools/run_preset.py --preset a2_u2_no_adapt --dataset cora --seed 0 --gpu 0 --dry_run
+```
+
+## Dataset Placement
+Default data root is `data` (`--root_path data` in `main.py`).
+
+Built-in datasets (auto-downloaded when missing):
+- `cora`, `citeseer`, `pubmed`
+- `computers`, `photo`
+- `coauthorcs` / `coauthorphysics`
+- `KarateClub`, `FootBall`, `Cornell`, `Texas`, `Wisconsin`
+
+## Custom Dataset Format (ATS-style)
+You can use your own dataset name directly (no code edit), as long as files follow:
+
+```text
+data/
+  <your_dataset_name>/
+    <your_dataset_name>_adj.npy
+    <your_dataset_name>_feat.npy
+    <your_dataset_name>_label.npy
+```
+
+Required shapes:
+- `*_adj.npy`: `[N, N]` adjacency matrix (non-zero entries are treated as edges).
+- `*_feat.npy`: `[N, F]` node features (`float32` recommended).
+- `*_label.npy`: `[N]` node labels (`int64` recommended, class ids from `0..K-1`).
+
+Important notes:
+- The three files must share the same node count `N`.
+- For clustering metrics, labels are required even though training is unsupervised.
+- Weighted adjacency is currently interpreted as edge existence (non-zero = connected).
+- For undirected graphs, use symmetric adjacency.
+
+Run on your custom dataset:
+```bash
+python main.py --dataset your_dataset_name --root_path data --gpu 0 --max_nums 10
+```
+
+Or use preset runner (set `--max_nums` explicitly for custom datasets):
+```bash
+python tools/run_preset.py --preset a2_u2_no_adapt --dataset your_dataset_name --max_nums 10 --gpu 0
+```
+
+Outputs are written to:
+- Logs: `results/<version>/<dataset>.log`
+- Metrics JSON: `results/<version>/<dataset>_metrics.json`
+
+## Minimal End-to-End Example (Your Own Dataset)
+1. Prepare files:
+```text
+data/mygraph/mygraph_adj.npy
+data/mygraph/mygraph_feat.npy
+data/mygraph/mygraph_label.npy
+```
+
+2. Run:
+```bash
+python tools/run_preset.py --preset a2_u2_no_adapt --dataset mygraph --max_nums 10 --gpu 0
+```
+
+3. Check result:
+```bash
+cat results/a2_u2_no_adapt_mygraph_s0/mygraph_metrics.json
+```
+
 ## Gap Statement
 Unsupervised graph clustering often fails in one of two ways:
 - relying only on node features misses structural cues,

@@ -14,7 +14,10 @@ class Exp:
     def __init__(self, configs):
         self.configs = configs
         if self.configs.use_gpu and torch.cuda.is_available():
-            self.device = torch.device('cuda:0')
+            gpu_id = int(getattr(self.configs, "gpu", 0))
+            if gpu_id < 0 or gpu_id >= torch.cuda.device_count():
+                gpu_id = 0
+            self.device = torch.device(f'cuda:{gpu_id}')
         else:
             self.device = torch.device('cpu')
 
