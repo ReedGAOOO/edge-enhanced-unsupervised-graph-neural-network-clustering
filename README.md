@@ -1,22 +1,14 @@
-# edge enhanced unsupervised graph neural network clustering
+# Edge Enhanced Unsupervised Graph Neural Network Clustering
 
 A compact research-oriented implementation for unsupervised graph clustering with edge-enhanced learning.
 
-## Upstream DSE Reference
+## DSE Reference
 - DSE repository: https://github.com/RiemannGraph/DSE_clustering
 - DSE/IsoSEL paper (arXiv:2504.09970v2): https://arxiv.org/abs/2504.09970
 - Local paper copy used in this repo: `reference/2504.09970v2.pdf`
 Note: the paper introduces the ASIL framework with LSEnet under the structural-entropy clustering line, which this repo builds upon.
 
-## Data And Artifact Policy
-- Large datasets and heavy experiment artifacts are **not tracked in Git**.
-- Only lightweight manifests are kept:
-  - `data/README.md`
-  - `Exp/README.md`
-- For full packages, keep cloud links in those manifest files.
-- Runtime behavior: missing benchmark datasets are auto-downloaded by PyG loaders under `--root_path data`.
-
-## What Makes DSE Different (No Predefined K)
+## Why chose DSE as basement (No Predefined K)
 Unlike many deep graph clustering pipelines that rely on a final k-means stage with a user-provided cluster number, DSE models clustering as structural-information minimization on a partitioning tree:
 - It introduces **Differentiable Structural Information (DSI)**, turning discrete structural entropy into a gradient-trainable objective.
 - The DSI objective is theoretically connected to clustering quality by bounding graph conductance.
@@ -347,6 +339,14 @@ edge-enhanced-unsupervised-graph-neural-network-clustering/
   manifold/
   utils/
 ```
+
+## Data And Artifact Policy
+- Large datasets and heavy experiment artifacts are **not tracked in Git**.
+- Only lightweight manifests are kept:
+  - `data/README.md`
+  - `Exp/README.md`
+- For full packages, keep cloud links in those manifest files.
+- Runtime behavior: missing benchmark datasets are auto-downloaded by PyG loaders under `--root_path data`.
 
 ## License
 This repository keeps the upstream `LICENSE` from the source project.
