@@ -1,0 +1,14 @@
+{
+  "edge_variant": "V5",
+  "edge_hybrid_alpha": 0.7,
+  "edge_feat_temp": 1.0,
+  "edge_fusion_gamma": 1.0,
+  "edge_fusion_gamma_start": 0.2,
+  "edge_fusion_gamma_end": 1.2,
+  "edge_fusion_gamma_sched_epochs": 100,
+  "edge_confidence_quantile": 0.0,
+  "edge_adaptive_alpha": true,
+  "edge_adaptive_alpha_strength": 1.0,
+  "edge_adaptive_alpha_bias": 2.0,
+  "edge_reliability_temp": 1.0
+}
