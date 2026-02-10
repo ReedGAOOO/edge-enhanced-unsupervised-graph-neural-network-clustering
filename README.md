@@ -2,6 +2,14 @@
 
 A compact research-oriented implementation for unsupervised graph clustering with edge-enhanced learning.
 
+## Data And Artifact Policy
+- Large datasets and heavy experiment artifacts are **not tracked in Git**.
+- Only lightweight manifests are kept:
+  - `data/README.md`
+  - `Exp/README.md`
+- For full packages, keep cloud links in those manifest files.
+- Runtime behavior: missing benchmark datasets are auto-downloaded by PyG loaders under `--root_path data`.
+
 ## Gap Statement
 Unsupervised graph clustering often fails in one of two ways:
 - relying only on node features misses structural cues,
@@ -65,7 +73,8 @@ Typical domains:
 - scientific collaboration graphs.
 
 ## Experiments And Evidence (Archived)
-All historical scripts/logs are archived in `Exp/`.
+The tables below summarize completed runs. Full logs/results are hosted externally
+(see `Exp/README.md` for cloud links).
 
 ### Experiment process
 - **Round A (same-batch ablation)**: `90/90` runs, 5 datasets, seeds `3,4,5`.
@@ -77,7 +86,7 @@ Robust score used in ranking:
 `robust_score = mean_delta_nmi + 0.25 * win_rate - 0.5 * tail_risk`
 
 ### Table 1. Same-batch ablation summary (vs baseline)
-Source: `Exp/bench_logs/_bench_logs_dse_u2_multiround_samebatch_v1/structure_overview_metrics.csv`
+Source: archived experiment exports (cloud mirror; see `Exp/README.md`)
 
 | Condition | Avg ΔNMI | Avg ΔARI | Win Rate | Tail Risk | Worst-Set ΔNMI | Robust Score | Avg Time Overhead % |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -88,7 +97,7 @@ Source: `Exp/bench_logs/_bench_logs_dse_u2_multiround_samebatch_v1/structure_ove
 | **DSE_A2_u2_no_adapt** | **0.1150** | **0.1028** | **0.8667** | **0.0000** | **0.0032** | **0.3316** | **0.6292** |
 
 ### Table 2. Best condition per dataset (same-batch)
-Source: `Exp/bench_logs/_bench_logs_dse_u2_multiround_samebatch_v1/dataset_best_conditions.csv`
+Source: archived experiment exports (cloud mirror; see `Exp/README.md`)
 
 | Dataset | Best Condition | Best ΔNMI | Best ΔARI | Best NMI | Best ARI |
 |---|---|---:|---:|---:|---:|
@@ -99,7 +108,7 @@ Source: `Exp/bench_logs/_bench_logs_dse_u2_multiround_samebatch_v1/dataset_best_
 | pubmed | DSE_S0_struct_only | 0.0210 | 0.0250 | 0.2381 | 0.1952 |
 
 ### Table 3. A2 expansion top results
-Source: `Exp/bench_logs/_bench_logs_dse_a2_explore_v1/robust_summary.csv`
+Source: archived experiment exports (cloud mirror; see `Exp/README.md`)
 
 | Condition | Mean ΔNMI | Win Rate | Tail Risk | Worst-Set ΔNMI | Robust Score |
 |---|---:|---:|---:|---:|---:|
@@ -111,7 +120,7 @@ Source: `Exp/bench_logs/_bench_logs_dse_a2_explore_v1/robust_summary.csv`
 | DSE_A2_sched140 | 0.1063 | 0.9333 | 0.0000 | 0.0050 | 0.3396 |
 
 ### Table 4. Causal stage check (DSE best vs baseline)
-Source: `Exp/bench_logs/_bench_logs_causal_edge_v1_cuda_clean/summary_by_condition.csv`
+Source: archived experiment exports (cloud mirror; see `Exp/README.md`)
 
 | Dataset | Baseline NMI | Best Condition | Best NMI | ΔNMI vs Baseline |
 |---|---:|---|---:|---:|
@@ -144,13 +153,10 @@ python3 tools/compare_baseline_vs_a2.py --datasets cora,citeseer,pubmed --seeds 
 ## Repository Layout
 ```text
 edge-enhanced-unsupervised-graph-neural-network-clustering/
-  data/                 # archived datasets used in previous runs
-  Exp/                  # archived experiment scripts + logs + historical results
-    scripts/
-    bench_logs/
-    dse_results/
-    model_variants/
-      presets/
+  data/                 # dataset manifest only (actual data kept out of git)
+    README.md
+  Exp/                  # experiment artifact manifest only
+    README.md
   configs/presets/
   tools/
   scripts/

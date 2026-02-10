@@ -1,0 +1,30 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local env / tooling
+.venv/
+venv/
+.env
+.DS_Store
+
+# Training outputs
+results/
+checkpoints/
+*.log
+*.tmp
+
+# Large artifacts are NOT tracked in git
+# Keep only README manifests in these dirs
+/data/*
+!/data/README.md
+/Exp/*
+!/Exp/README.md
+
+# Optional local archives
+*.tar
+*.tar.gz
+*.zip
+*.7z
+*.bundle
