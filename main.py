@@ -50,6 +50,8 @@ parser.add_argument('--edge_hybrid_alpha', type=float, default=0.5,
                     help='Feature weight in hybrid edge variant V4/V5.')
 parser.add_argument('--edge_feat_temp', type=float, default=1.0,
                     help='Temperature for feature-similarity edge weighting.')
+parser.add_argument('--edge_input_prior_alpha', type=float, default=0.0,
+                    help='Blend ratio for dataset-provided edge weights when using V2/V3/V4/V5.')
 parser.add_argument('--edge_fusion_gamma', type=float, default=1.0,
                     help='Fusion strength for V5 attention-stage edge fusion.')
 parser.add_argument('--edge_fusion_gamma_start', type=float, default=None,

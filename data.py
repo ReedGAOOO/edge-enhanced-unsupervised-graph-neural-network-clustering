@@ -37,6 +37,15 @@ def has_ats_style_files(root, name):
     )
 
 
+def has_sparse_style_files(root, name):
+    base = Path(root) / name
+    return (
+        (base / f"{name}_edge_index.npy").exists()
+        and (base / f"{name}_feat.npy").exists()
+        and (base / f"{name}_label.npy").exists()
+    )
+
+
 def load_data(configs):
     dataset = None
     name = configs.dataset
@@ -54,7 +63,7 @@ def load_data(configs):
         dataset = KarateClub()
     elif name == 'FootBall':
         dataset = Football()
-    elif name in ['eat', 'bat', 'uat'] or has_ats_style_files(configs.root_path, name):
+    elif name in ['eat', 'bat', 'uat'] or has_ats_style_files(configs.root_path, name) or has_sparse_style_files(configs.root_path, name):
         dataset = ATsDataset(root=configs.root_path, name=name)
     elif name in ['Cornell', 'Texas', 'Wisconsin']:
         dataset = WebKB(root=configs.root_path, name=name)
@@ -63,13 +72,20 @@ def load_data(configs):
             f"Unsupported dataset '{name}'. Built-ins: "
             "cora/citeseer/pubmed/computers/photo/coauthorcs/coauthorphysics/KarateClub/FootBall/"
             "Cornell/Texas/Wisconsin, or custom ATS-style files under "
-            f"'{configs.root_path}/{name}/' with {name}_adj.npy, {name}_feat.npy, {name}_label.npy."
+            f"'{configs.root_path}/{name}/' with dense files "
+            f"({name}_adj.npy, {name}_feat.npy, {name}_label.npy) or sparse files "
+            f"({name}_edge_index.npy, optional {name}_edge_weight.npy/{name}_edge_attr.npy, "
+            f"{name}_feat.npy, {name}_label.npy)."
         )
     data = dataset[0].clone()
     N = data.x.shape[0]
     variant = str(getattr(configs, 'edge_variant', 'V1')).upper()
     edge_index = data.edge_index
-    edge_weight = torch.ones(edge_index.shape[1], dtype=torch.float32)
+    if hasattr(data, "edge_weight") and data.edge_weight is not None and data.edge_weight.numel() == edge_index.shape[1]:
+        input_prior_weight = data.edge_weight.float()
+    else:
+        input_prior_weight = torch.ones(edge_index.shape[1], dtype=torch.float32)
+    edge_weight = input_prior_weight
 
     if variant in {'V2', 'V4', 'V5'}:
         w_struct = build_structural_edge_weight(edge_index, N)
@@ -85,13 +101,19 @@ def load_data(configs):
         alpha = max(0.0, min(1.0, alpha))
         edge_weight = alpha * w_feat + (1.0 - alpha) * w_struct
 
+    prior_alpha = float(getattr(configs, 'edge_input_prior_alpha', 0.0))
+    prior_alpha = max(0.0, min(1.0, prior_alpha))
+    if prior_alpha > 0.0 and variant in {'V2', 'V3', 'V4', 'V5'}:
+        edge_weight = (1.0 - prior_alpha) * edge_weight + prior_alpha * input_prior_weight
+
     edge_weight = edge_weight.clamp_min(1e-6)
     data.edge_weight = edge_weight
     data.adj = torch.sparse_coo_tensor(indices=edge_index,
                                        values=edge_weight,
                                        size=(N, N))
     data.adj = normalize_adj(data.adj, sparse=True)
-    data.num_classes = data.y.max().item()
+    valid_y = data.y[data.y >= 0]
+    data.num_classes = int(valid_y.max().item() + 1) if valid_y.numel() > 0 else 1
     return data
 
 
@@ -141,27 +163,81 @@ class Football(Dataset):
 class ATsDataset(Dataset):
     def __init__(self, root, name='eat'):
         super().__init__(root)
-        adj = np.load(f'{root}/{name}/{name}_adj.npy')
-        feat = np.load(f'{root}/{name}/{name}_feat.npy')
-        label = np.load(f'{root}/{name}/{name}_label.npy')
+        base = Path(root) / name
+        feat_path = base / f"{name}_feat.npy"
+        label_path = base / f"{name}_label.npy"
+        dense_adj_path = base / f"{name}_adj.npy"
+        sparse_edge_index_path = base / f"{name}_edge_index.npy"
+        edge_weight_path = base / f"{name}_edge_weight.npy"
+        edge_attr_path = base / f"{name}_edge_attr.npy"
 
-        if adj.ndim != 2 or adj.shape[0] != adj.shape[1]:
-            raise ValueError(f"{name}_adj.npy must be a square [N, N] matrix, got {adj.shape}")
+        feat = np.load(feat_path)
+        label = np.load(label_path)
         if feat.ndim != 2:
             raise ValueError(f"{name}_feat.npy must be [N, F], got {feat.shape}")
         if label.ndim != 1:
             raise ValueError(f"{name}_label.npy must be [N], got {label.shape}")
-        if not (adj.shape[0] == feat.shape[0] == label.shape[0]):
+        if feat.shape[0] != label.shape[0]:
             raise ValueError(
-                f"Node count mismatch in ATS-style dataset '{name}': "
-                f"adj={adj.shape[0]}, feat={feat.shape[0]}, label={label.shape[0]}"
+                f"Node count mismatch in custom dataset '{name}': "
+                f"feat={feat.shape[0]}, label={label.shape[0]}"
             )
 
         self.num_nodes = feat.shape[0]
         x = torch.tensor(feat).float()
         y = torch.tensor(label).long()
-        edge_index = adjacency2index(torch.tensor(adj))
-        data = Data(x=x, edge_index=edge_index, y=y)
+
+        if dense_adj_path.exists():
+            adj = np.load(dense_adj_path)
+            if adj.ndim != 2 or adj.shape[0] != adj.shape[1]:
+                raise ValueError(f"{name}_adj.npy must be a square [N, N] matrix, got {adj.shape}")
+            if adj.shape[0] != feat.shape[0]:
+                raise ValueError(
+                    f"Node count mismatch in dense custom dataset '{name}': "
+                    f"adj={adj.shape[0]}, feat={feat.shape[0]}"
+                )
+            edge_index = adjacency2index(torch.tensor(adj))
+            data = Data(x=x, edge_index=edge_index, y=y)
+        elif sparse_edge_index_path.exists():
+            edge_index = np.load(sparse_edge_index_path)
+            if edge_index.ndim != 2 or edge_index.shape[0] != 2:
+                raise ValueError(f"{name}_edge_index.npy must be [2, E], got {edge_index.shape}")
+            if edge_index.shape[1] == 0:
+                raise ValueError(f"{name}_edge_index.npy has no edges.")
+            if int(edge_index.max()) >= self.num_nodes or int(edge_index.min()) < 0:
+                raise ValueError(
+                    f"{name}_edge_index.npy contains invalid node index. "
+                    f"num_nodes={self.num_nodes}, min={int(edge_index.min())}, max={int(edge_index.max())}"
+                )
+
+            edge_index_t = torch.tensor(edge_index, dtype=torch.long)
+            if edge_weight_path.exists():
+                edge_weight = np.load(edge_weight_path)
+                if edge_weight.ndim != 1 or edge_weight.shape[0] != edge_index.shape[1]:
+                    raise ValueError(
+                        f"{name}_edge_weight.npy must be [E], got {edge_weight.shape}, E={edge_index.shape[1]}"
+                    )
+                edge_weight_t = torch.tensor(edge_weight, dtype=torch.float32)
+            else:
+                edge_weight_t = torch.ones(edge_index.shape[1], dtype=torch.float32)
+
+            data = Data(x=x, edge_index=edge_index_t, edge_weight=edge_weight_t, y=y)
+
+            if edge_attr_path.exists():
+                edge_attr = np.load(edge_attr_path)
+                if edge_attr.ndim != 2 or edge_attr.shape[0] != edge_index.shape[1]:
+                    raise ValueError(
+                        f"{name}_edge_attr.npy must be [E, D], got {edge_attr.shape}, E={edge_index.shape[1]}"
+                    )
+                data.edge_attr = torch.tensor(edge_attr, dtype=torch.float32)
+        else:
+            raise FileNotFoundError(
+                f"Custom dataset '{name}' not found. Need either dense style "
+                f"({dense_adj_path.name}, {feat_path.name}, {label_path.name}) or sparse style "
+                f"({sparse_edge_index_path.name}, optional {edge_weight_path.name}/{edge_attr_path.name}, "
+                f"{feat_path.name}, {label_path.name})."
+            )
+
         self.data = data
 
     def len(self) -> int:
