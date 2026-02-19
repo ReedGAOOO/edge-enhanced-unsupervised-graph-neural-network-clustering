@@ -17,6 +17,17 @@ PRESET_MAP = {
     "baseline_v1": "configs/presets/baseline_v1.json",
     "v5_mid_adaptive_u2": "configs/presets/v5_mid_adaptive_u2.json",
     "a2_u2_no_adapt": "configs/presets/a2_u2_no_adapt.json",
+    # ECHF family (new canonical names).
+    "b15_echf_branch": "configs/presets/b15_echf_branch.json",
+    "b15_echf_branch_s60": "configs/presets/b15_echf_branch_s60.json",
+    "g15_echf_main": "configs/presets/g15_echf_main.json",
+    "g15_echf_noadapt": "configs/presets/g15_echf_noadapt.json",
+    "g17_v5_temp15": "configs/presets/g17_v5_temp15.json",
+    # Backward-compatible aliases.
+    "b15_pathb_v12_hier": "configs/presets/b15_pathb_v12_hier.json",
+    "g17_temp1p5_mainline": "configs/presets/g17_temp1p5_mainline.json",
+    "g15_default_hetero": "configs/presets/g15_default_hetero.json",
+    "g15_noadapt_hetero": "configs/presets/g15_noadapt_hetero.json",
 }
 
 
@@ -35,8 +46,8 @@ def load_preset(repo_root: Path, name_or_path: str) -> dict:
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
 
-    parser = argparse.ArgumentParser(description="Run DSE preset (baseline/V5/A2)")
-    parser.add_argument("--preset", type=str, default="a2_u2_no_adapt")
+    parser = argparse.ArgumentParser(description="Run edge-fusion preset")
+    parser.add_argument("--preset", type=str, default="g15_echf_main")
     parser.add_argument("--dataset", type=str, default="cora")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--gpu", type=int, default=0)
@@ -48,8 +59,15 @@ def main() -> None:
     parser.add_argument("--exp_iters", type=int, default=1)
     parser.add_argument("--max_nums", type=int, default=-1, help="Override max_nums; -1 means auto by dataset")
     parser.add_argument("--version", type=str, default="")
+    parser.add_argument("--list_presets", action="store_true")
     parser.add_argument("--dry_run", action="store_true")
     args = parser.parse_args()
+
+    if args.list_presets:
+        print("Available presets:")
+        for k in sorted(PRESET_MAP.keys()):
+            print(f"- {k}: {PRESET_MAP[k]}")
+        return
 
     dataset_key = args.dataset.lower()
     if args.max_nums > 0:
@@ -97,6 +115,8 @@ def main() -> None:
         str(preset.get("edge_hybrid_alpha", 0.5)),
         "--edge_feat_temp",
         str(preset.get("edge_feat_temp", 1.0)),
+        "--edge_input_prior_alpha",
+        str(preset.get("edge_input_prior_alpha", 0.0)),
         "--edge_fusion_gamma",
         str(preset.get("edge_fusion_gamma", 1.0)),
         "--edge_fusion_gamma_sched_epochs",
@@ -109,6 +129,16 @@ def main() -> None:
         str(preset.get("edge_adaptive_alpha_bias", 0.0)),
         "--edge_reliability_temp",
         str(preset.get("edge_reliability_temp", 1.0)),
+        "--edge_attr_hidden_dim",
+        str(preset.get("edge_attr_hidden_dim", 64)),
+        "--edge_attr_fusion_scale",
+        str(preset.get("edge_attr_fusion_scale", 1.0)),
+        "--edge_attr_weight_blend",
+        str(preset.get("edge_attr_weight_blend", 0.0)),
+        "--edge_attr_weight_temp",
+        str(preset.get("edge_attr_weight_temp", 1.0)),
+        "--edge_attr_weight_apply_to",
+        str(preset.get("edge_attr_weight_apply_to", "si_only")),
     ]
 
     if preset.get("edge_fusion_gamma_start", None) is not None:
@@ -117,6 +147,10 @@ def main() -> None:
         cmd += ["--edge_fusion_gamma_end", str(preset["edge_fusion_gamma_end"])]
     if bool(preset.get("edge_adaptive_alpha", False)):
         cmd.append("--edge_adaptive_alpha")
+    if bool(preset.get("edge_attr_hierarchical", False)):
+        cmd.append("--edge_attr_hierarchical")
+    if bool(preset.get("append_generic_edge_attr", False)):
+        cmd.append("--append_generic_edge_attr")
 
     print("CMD:")
     print(" ".join(cmd))

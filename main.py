@@ -9,13 +9,21 @@ import json
 from utils.train_utils import DotDict
 
 
-def set_seed(seed):
+def set_seed(seed, deterministic=True):
+    if deterministic:
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = bool(deterministic)
+        torch.backends.cudnn.benchmark = not bool(deterministic)
+    try:
+        torch.use_deterministic_algorithms(bool(deterministic), warn_only=True)
+    except Exception:
+        pass
 
 
 parser = argparse.ArgumentParser(description='Lorentz Structural Entropy')
@@ -41,11 +49,18 @@ parser.add_argument('--temperature', type=float, default=0.9)
 parser.add_argument('--n_cluster_trials', type=int, default=3)
 parser.add_argument('--alpha', type=float, default=0.01)
 parser.add_argument('--knn', type=int, default=8)
+parser.add_argument('--knn_mode', type=str, default='auto', choices=['auto', 'dense', 'edge'],
+                    help='KNN augmentation mode in se_loss. dense: full pairwise; edge: score only existing edges; auto: edge for large graphs.')
+parser.add_argument('--knn_auto_threshold', type=int, default=20000,
+                    help='When knn_mode=auto and num_nodes exceeds this threshold, switch to edge mode.')
 parser.add_argument("--epsInt", type=int, default=8)
-parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5'],
+parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12'],
                     help='V1: plain adjacency; V2: structural pre-weight; '
                          'V3: feature-similarity pre-weight; V4: hybrid pre-weight; '
-                         'V5: hybrid + attention-stage edge fusion.')
+                         'V5: hybrid + attention-stage edge fusion; '
+                         'V6: edge-attr gated fusion; V7: edge-attr gated fusion + alignment residual; '
+                         'V8: calibrated mixture of structural/edge-attr fusion; '
+                         'V12: V5 residual fusion with calibrated edge-attr correction.')
 parser.add_argument('--edge_hybrid_alpha', type=float, default=0.5,
                     help='Feature weight in hybrid edge variant V4/V5.')
 parser.add_argument('--edge_feat_temp', type=float, default=1.0,
@@ -70,22 +85,48 @@ parser.add_argument('--edge_adaptive_alpha_bias', type=float, default=0.0,
                     help='Bias of graph-adaptive edge-fusion scaling.')
 parser.add_argument('--edge_reliability_temp', type=float, default=1.0,
                     help='Temperature for per-edge reliability in V5 edge fusion.')
+parser.add_argument('--edge_attr_hidden_dim', type=int, default=64,
+                    help='Hidden size for edge-attribute encoder in V6/V7.')
+parser.add_argument('--edge_attr_fusion_scale', type=float, default=1.0,
+                    help='Fusion scale for edge-attribute terms in V6/V7.')
+parser.add_argument('--append_generic_edge_attr', action='store_true',
+                    help='Append generic edge features to provided edge_attr (for custom datasets).')
+parser.add_argument('--edge_attr_weight_blend', type=float, default=0.0,
+                    help='Path-A: blend ratio for edge-attr-derived weights into SI graph (0~1).')
+parser.add_argument('--edge_attr_weight_temp', type=float, default=1.0,
+                    help='Path-A: temperature when mapping edge_attr to weights.')
+parser.add_argument('--edge_attr_weight_apply_to', type=str, default='si_only', choices=['si_only', 'both'],
+                    help='Path-A: apply edge-attr-derived weights to SI graph only, or both SI and message graph.')
+parser.add_argument('--edge_attr_hierarchical', action='store_true',
+                    help='Path-B: propagate/coarsen edge attributes across hierarchy levels.')
+parser.add_argument('--known_only_eval', action='store_true',
+                    help='For datasets with explicit unknown label mapping, remap unknown labels to -1 during evaluation.')
 parser.add_argument('--train_log_interval', type=int, default=1,
                     help='Epoch interval for Stage2 training loss logs.')
+parser.add_argument('--amp_bf16', action='store_true',
+                    help='Enable CUDA autocast with bfloat16 for lower memory usage.')
 
 parser.add_argument('--patience', type=int, default=5, help='early stopping patience')
 parser.add_argument('--save_path', type=str, default='model.pt')
+parser.add_argument('--deterministic', dest='deterministic', action='store_true',
+                    help='Enable deterministic algorithms for better reproducibility.')
+parser.add_argument('--non_deterministic', dest='deterministic', action='store_false',
+                    help='Disable deterministic algorithms for maximum throughput.')
 
 # GPU
-parser.add_argument('--use_gpu', action='store_false', help='use gpu')
+parser.add_argument('--use_gpu', dest='use_gpu', action='store_true',
+                    help='Use GPU when available (default).')
+parser.add_argument('--no_gpu', dest='use_gpu', action='store_false',
+                    help='Force CPU execution.')
 parser.add_argument('--gpu', type=int, default=0, help='gpu')
 parser.add_argument('--devices', type=str, default='0,1',
                     help='device ids of multiple gpus')
 parser.add_argument('--seed', type=int, default=3047)
+parser.set_defaults(use_gpu=True, deterministic=True)
 
 
 configs = parser.parse_args()
-set_seed(configs.seed)
+set_seed(configs.seed, deterministic=configs.deterministic)
 # with open(f'./configs/{configs.dataset}.json', 'wt') as f:
 #     json.dump(vars(configs), f, indent=4)
 

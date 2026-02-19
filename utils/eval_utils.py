@@ -90,8 +90,14 @@ def merge_nodes_once(manifold, root_coords, tree, group_list, count):
 
 class cluster_metrics:
     def __init__(self, trues, predicts):
-        self.true_label = trues
-        self.pred_label = predicts
+        true_label = np.array(trues)
+        pred_label = np.array(predicts)
+        valid_mask = true_label >= 0
+        if valid_mask.any():
+            true_label = true_label[valid_mask]
+            pred_label = pred_label[valid_mask]
+        self.true_label = true_label
+        self.pred_label = pred_label
 
     def clusterAcc(self):
         from scipy.optimize import linear_sum_assignment
@@ -100,6 +106,8 @@ class cluster_metrics:
 
         true_label = np.array(self.true_label)
         pred_label = np.array(self.pred_label)
+        if true_label.size == 0:
+            return float("nan")
 
         l1 = list(set(true_label))
         l2 = list(set(pred_label))
@@ -118,7 +126,7 @@ class cluster_metrics:
             pred_to_true[l2[c]] = l1[r]
 
         if len(pred_to_true) < len(l2):
-            fallback_class = true_label[np.bincount(true_label).argmax()]
+            fallback_class = int(np.max(true_label)) + 1
             for c2 in l2:
                 if c2 not in pred_to_true:
                     pred_to_true[c2] = fallback_class
@@ -130,6 +138,10 @@ class cluster_metrics:
         return acc
 
     def evaluateFromLabel(self, use_acc=False):
+        if len(self.true_label) == 0:
+            if use_acc:
+                return float("nan"), float("nan"), float("nan")
+            return float("nan"), float("nan")
         nmi = metrics.normalized_mutual_info_score(self.true_label, self.pred_label)
         adjscore = metrics.adjusted_rand_score(self.true_label, self.pred_label)
         if use_acc:

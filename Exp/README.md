@@ -1,12 +1,9 @@
-# Experiment Artifact Policy
+# Legacy Pointer
 
-This repository does **not** track full experiment logs/results in Git.
+The experiment center has been moved to lower-case `exp/`.
 
-## Optional cloud mirrors (fill with your own links)
-- Experiment logs pack (Google Drive): `TODO`
-- Experiment logs pack (Baidu Netdisk): `TODO`
-- Processed result tables (Google Drive): `TODO`
+- New index: `exp/README.md`
+- Stage tables: `exp/stage_results/README.md`
+- Mainline report: `exp/reports/MAINLINE_ECHF_B15_G15_2026-02-19.md`
 
-## Suggested practice
-Keep only compact summaries in Git (CSV/Markdown under a few MB),
-and host heavy logs/checkpoints externally.
+`Exp/` is kept only as a backward-compatible pointer.

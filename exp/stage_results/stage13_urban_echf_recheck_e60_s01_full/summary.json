@@ -1,0 +1,33 @@
+{
+  "tag": "urban_echf_recheck_e60_s01_v1",
+  "datasets": [
+    "urban_bangkok_plot",
+    "urban_beijing_plot",
+    "urban_boston_plot",
+    "urban_chicago_plot",
+    "urban_johannesburg_plot",
+    "urban_madrid_plot",
+    "urban_melbourne_plot",
+    "urban_paris_plot",
+    "urban_shanghai_plot",
+    "urban_singapore_plot",
+    "urban_sydney_plot",
+    "urban_tokyo_plot",
+    "urban_washingtondc_plot"
+  ],
+  "seeds": [
+    0,
+    1
+  ],
+  "known_only_eval": true,
+  "n_conditions": 2,
+  "total_runs": 52,
+  "ok_runs": 45,
+  "skip_exists_runs": 7,
+  "fail_runs": 0,
+  "runs_csv": "/home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/results/urban_echf_recheck_e60_s01_v1/runs.csv",
+  "summary_by_condition_dataset_csv": "/home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/results/urban_echf_recheck_e60_s01_v1/summary_by_condition_dataset.csv",
+  "delta_vs_baseline_csv": "/home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/results/urban_echf_recheck_e60_s01_v1/delta_vs_baseline.csv",
+  "summary_by_condition_csv": "/home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/results/urban_echf_recheck_e60_s01_v1/summary_by_condition.csv",
+  "best_condition_by_dataset_csv": "/home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/results/urban_echf_recheck_e60_s01_v1/best_condition_by_dataset.csv"
+}

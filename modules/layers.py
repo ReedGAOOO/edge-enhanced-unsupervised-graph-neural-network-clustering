@@ -93,7 +93,15 @@ class LorentzAgg(nn.Module):
             att_adj = torch.mul(adj.to_dense(), att_adj)
             support_t = torch.matmul(att_adj, x)
         else:
-            support_t = torch.matmul(adj, x)
+            # CUDA sparse addmm currently does not support bfloat16.
+            # Keep sparse aggregation in fp32 and cast back to preserve AMP flow.
+            if adj.is_sparse and torch.is_autocast_enabled():
+                out_dtype = x.dtype
+                with torch.autocast(device_type="cuda", enabled=False):
+                    support_t = torch.matmul(adj.float(), x.float())
+                support_t = support_t.to(dtype=out_dtype)
+            else:
+                support_t = torch.matmul(adj, x)
 
         denorm = (-self.manifold.inner(None, support_t, keepdim=True))
         denorm = denorm.abs().clamp_min(1e-8).sqrt()
@@ -106,7 +114,8 @@ class LorentzAssignment(nn.Module):
                  bias=False, temperature=0.2, edge_variant='V1',
                  edge_fusion_gamma=1.0, edge_confidence_quantile=0.0,
                  edge_adaptive_alpha=False, edge_adaptive_alpha_strength=2.0,
-                 edge_adaptive_alpha_bias=0.0, edge_reliability_temp=1.0):
+                 edge_adaptive_alpha_bias=0.0, edge_reliability_temp=1.0,
+                 edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0, edge_attr_dim=1):
         super(LorentzAssignment, self).__init__()
         self.manifold = manifold
         self.num_assign = num_assign
@@ -117,38 +126,62 @@ class LorentzAssignment(nn.Module):
         self.edge_adaptive_alpha_strength = float(edge_adaptive_alpha_strength)
         self.edge_adaptive_alpha_bias = float(edge_adaptive_alpha_bias)
         self.edge_reliability_temp = float(max(1e-3, edge_reliability_temp))
+        self.edge_attr_fusion_scale = float(edge_attr_fusion_scale)
         self.last_graph_alpha = 1.0
         self.last_reliability_mean = 1.0
+        self.last_mix_beta = 0.0
         self.assign_linear = nn.Linear(in_dim, num_assign, bias=bias)
         nn.init.xavier_normal_(self.assign_linear.weight)
         self.temperature = temperature
         self.key_linear = LorentzLinear(manifold, in_dim, hid_dim, bias=False)
         self.query_linear = LorentzLinear(manifold, in_dim, hid_dim, bias=False)
         self.dropout = nn.Dropout(dropout)
+        self.edge_attr_encoder = nn.Sequential(
+            nn.Linear(int(max(1, edge_attr_dim)), max(8, int(edge_attr_hidden_dim))),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(max(8, int(edge_attr_hidden_dim)), 2),
+        )
 
     def set_edge_fusion_gamma(self, gamma: float):
         self.edge_fusion_gamma = float(gamma)
 
-    def forward(self, x, adj):
+    def _graph_alpha(self, signal: torch.Tensor, fallback_dtype: torch.dtype, fallback_device: torch.device):
+        if not self.edge_adaptive_alpha:
+            return torch.tensor(1.0, dtype=fallback_dtype, device=fallback_device)
+        with torch.no_grad():
+            s_mean = signal.detach().mean()
+            s_std = signal.detach().std(unbiased=False)
+            raw = s_mean - s_std
+            alpha = torch.sigmoid(
+                self.edge_adaptive_alpha_strength * raw + self.edge_adaptive_alpha_bias
+            ).clamp(0.05, 0.95)
+        return alpha
+
+    def _struct_reliability_and_log(self, edge_value: torch.Tensor):
+        edge_log = torch.log(edge_value.clamp_min(1e-8))
+        center = torch.median(edge_value.detach())
+        spread = edge_value.detach().std(unbiased=False).clamp_min(1e-6) * self.edge_reliability_temp
+        reliability = torch.sigmoid((edge_value - center) / spread)
+        if self.edge_confidence_quantile > 0.0:
+            qv = float(min(0.999, max(0.0, self.edge_confidence_quantile)))
+            threshold = torch.quantile(edge_value.detach(), qv)
+            conf_mask = (edge_value >= threshold).to(edge_log.dtype)
+            reliability = reliability * conf_mask
+        return reliability, edge_log
+
+    def forward(self, x, adj, edge_attr=None, use_edge_attr=False):
         ass = self.assign_linear(self.manifold.logmap0(x)).softmax(-1)
         q = self.query_linear(x)
         k = self.key_linear(x)
-        adj_coo = adj.coalesce()
+        adj_coo = adj.coalesce() if adj.is_sparse else adj.to_sparse().coalesce()
         edge_index = adj_coo.indices()
         edge_value = adj_coo.values()
         src, dst = edge_index[0], edge_index[1]
         score = self.manifold.dist(q[src], k[dst])
         score = -score
         if self.edge_variant == 'V5':
-            edge_log = torch.log(edge_value.clamp_min(1e-8))
-            center = torch.median(edge_value.detach())
-            spread = edge_value.detach().std(unbiased=False).clamp_min(1e-6) * self.edge_reliability_temp
-            reliability = torch.sigmoid((edge_value - center) / spread)
-            if self.edge_confidence_quantile > 0.0:
-                qv = float(min(0.999, max(0.0, self.edge_confidence_quantile)))
-                threshold = torch.quantile(edge_value.detach(), qv)
-                conf_mask = (edge_value >= threshold).to(edge_log.dtype)
-                reliability = reliability * conf_mask
+            reliability, edge_log = self._struct_reliability_and_log(edge_value)
             if self.edge_adaptive_alpha:
                 with torch.no_grad():
                     mean_w = edge_value.detach().mean()
@@ -161,13 +194,110 @@ class LorentzAssignment(nn.Module):
                 graph_alpha = edge_log.new_tensor(1.0)
             self.last_graph_alpha = float(graph_alpha.detach().cpu().item())
             self.last_reliability_mean = float(reliability.detach().mean().cpu().item())
+            self.last_mix_beta = 0.0
             score = score + float(self.edge_fusion_gamma) * graph_alpha * reliability * edge_log
+        elif self.edge_variant in {'V6', 'V7', 'V8', 'V12'} and bool(use_edge_attr) and edge_attr is not None:
+            if edge_attr.dim() == 1:
+                edge_attr = edge_attr.unsqueeze(1)
+            if edge_attr.shape[0] == edge_value.shape[0]:
+                edge_attr = torch.nan_to_num(
+                    edge_attr.to(dtype=score.dtype, device=score.device),
+                    nan=0.0,
+                    posinf=0.0,
+                    neginf=0.0,
+                )
+                attr_out = self.edge_attr_encoder(edge_attr)
+                attr_bias = attr_out[:, 0]
+                attr_gate = torch.sigmoid(attr_out[:, 1])
+                attr_bias = (attr_bias - attr_bias.mean()) / attr_bias.std(unbiased=False).clamp_min(1e-6)
+                edge_log = torch.log(edge_value.clamp_min(1e-8))
+                if self.edge_variant == 'V6':
+                    reliability = attr_gate
+                    if self.edge_confidence_quantile > 0.0:
+                        qv = float(min(0.999, max(0.0, self.edge_confidence_quantile)))
+                        threshold = torch.quantile(reliability.detach(), qv)
+                        reliability = reliability * (reliability >= threshold).to(reliability.dtype)
+                    graph_alpha = self._graph_alpha(reliability, fallback_dtype=score.dtype, fallback_device=score.device)
+                    attr_term = reliability * attr_bias
+                    self.last_mix_beta = 1.0
+                elif self.edge_variant == 'V7':
+                    reliability = attr_gate
+                    if self.edge_confidence_quantile > 0.0:
+                        qv = float(min(0.999, max(0.0, self.edge_confidence_quantile)))
+                        threshold = torch.quantile(reliability.detach(), qv)
+                        reliability = reliability * (reliability >= threshold).to(reliability.dtype)
+                    graph_alpha = self._graph_alpha(reliability, fallback_dtype=score.dtype, fallback_device=score.device)
+                    align = torch.tanh(attr_bias * torch.tanh(edge_log))
+                    attr_term = 0.7 * reliability * attr_bias + 0.3 * align
+                    self.last_mix_beta = 1.0
+                elif self.edge_variant == 'V8':
+                    # V8: calibrate attribute fusion by agreement with structural prior.
+                    struct_rel, _ = self._struct_reliability_and_log(edge_value)
+                    attr_rel = attr_gate
+                    reliability = 0.5 * (struct_rel + attr_rel)
+                    if self.edge_confidence_quantile > 0.0:
+                        qv = float(min(0.999, max(0.0, self.edge_confidence_quantile)))
+                        threshold = torch.quantile(reliability.detach(), qv)
+                        reliability = reliability * (reliability >= threshold).to(reliability.dtype)
+                    graph_alpha = self._graph_alpha(reliability, fallback_dtype=score.dtype, fallback_device=score.device)
+
+                    edge_z = (edge_log - edge_log.mean()) / edge_log.std(unbiased=False).clamp_min(1e-6)
+                    attr_z = (attr_bias - attr_bias.mean()) / attr_bias.std(unbiased=False).clamp_min(1e-6)
+                    with torch.no_grad():
+                        agreement = (edge_z.detach() * attr_z.detach()).mean().clamp(-1.0, 1.0)
+                        mix_beta = torch.sigmoid(
+                            self.edge_adaptive_alpha_strength * agreement + self.edge_adaptive_alpha_bias
+                        ).clamp(0.05, 0.95)
+                    self.last_mix_beta = float(mix_beta.detach().cpu().item())
+
+                    struct_term = struct_rel * torch.tanh(edge_log)
+                    attr_term_raw = attr_rel * torch.tanh(attr_bias)
+                    attr_term = (1.0 - mix_beta) * struct_term + mix_beta * attr_term_raw
+                else:
+                    # V12: keep V5 as stable trunk and add calibrated edge-attribute residual.
+                    struct_rel, _ = self._struct_reliability_and_log(edge_value)
+                    attr_rel = attr_gate
+                    if self.edge_confidence_quantile > 0.0:
+                        qv = float(min(0.999, max(0.0, self.edge_confidence_quantile)))
+                        threshold = torch.quantile(struct_rel.detach(), qv)
+                        keep = (struct_rel >= threshold).to(struct_rel.dtype)
+                        struct_rel = struct_rel * keep
+                        attr_rel = attr_rel * keep
+                    graph_alpha = self._graph_alpha(struct_rel, fallback_dtype=score.dtype, fallback_device=score.device)
+                    reliability = struct_rel
+
+                    edge_z = (edge_log - edge_log.mean()) / edge_log.std(unbiased=False).clamp_min(1e-6)
+                    attr_z = (attr_bias - attr_bias.mean()) / attr_bias.std(unbiased=False).clamp_min(1e-6)
+                    with torch.no_grad():
+                        agreement = (edge_z.detach() * attr_z.detach()).mean().clamp(-1.0, 1.0)
+                        mix_beta = torch.sigmoid(
+                            self.edge_adaptive_alpha_strength * agreement + self.edge_adaptive_alpha_bias
+                        ).clamp(0.05, 0.95)
+                    self.last_mix_beta = float(mix_beta.detach().cpu().item())
+
+                    residual = attr_rel * attr_bias
+                    residual = residual / residual.std(unbiased=False).clamp_min(1e-6)
+                    attr_term = struct_rel * edge_log + mix_beta * residual
+                score = score + float(self.edge_fusion_gamma) * self.edge_attr_fusion_scale * graph_alpha * attr_term
+                self.last_graph_alpha = float(graph_alpha.detach().cpu().item())
+                self.last_reliability_mean = float(reliability.detach().mean().cpu().item())
+            else:
+                self.last_graph_alpha = 1.0
+                self.last_reliability_mean = 1.0
+                self.last_mix_beta = 0.0
         else:
             self.last_graph_alpha = 1.0
             self.last_reliability_mean = 1.0
+            self.last_mix_beta = 0.0
         score = scatter_softmax(score, src, dim=-1)
         att = torch.sparse_coo_tensor(edge_index, score, size=(x.shape[0], x.shape[0])).to(x.device)
-        ass = torch.matmul(att, ass)   # (N_k, N_{k-1})
+        if att.is_sparse and torch.is_autocast_enabled():
+            out_dtype = ass.dtype
+            with torch.autocast(device_type="cuda", enabled=False):
+                ass = torch.matmul(att.float(), ass.float())
+            ass = ass.to(dtype=out_dtype)
+        else:
+            ass = torch.matmul(att, ass)   # (N_k, N_{k-1})
         ass = gumbel_softmax(torch.log(ass + 1e-6), temperature=self.temperature)
         return ass
 
@@ -177,7 +307,8 @@ class LSENetLayer(nn.Module):
                  bias=False, use_att=False, nonlin=None, temperature=0.2,
                  edge_variant='V1', edge_fusion_gamma=1.0, edge_confidence_quantile=0.0,
                  edge_adaptive_alpha=False, edge_adaptive_alpha_strength=2.0,
-                 edge_adaptive_alpha_bias=0.0, edge_reliability_temp=1.0):
+                 edge_adaptive_alpha_bias=0.0, edge_reliability_temp=1.0,
+                 edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0, edge_attr_dim=1):
         super(LSENetLayer, self).__init__()
         self.manifold = manifold
         # self.embeder = LorentzGraphConvolution(manifold, in_dim, hid_dim,
@@ -191,17 +322,26 @@ class LSENetLayer(nn.Module):
                                           edge_adaptive_alpha=edge_adaptive_alpha,
                                           edge_adaptive_alpha_strength=edge_adaptive_alpha_strength,
                                           edge_adaptive_alpha_bias=edge_adaptive_alpha_bias,
-                                          edge_reliability_temp=edge_reliability_temp)
+                                          edge_reliability_temp=edge_reliability_temp,
+                                          edge_attr_hidden_dim=edge_attr_hidden_dim,
+                                          edge_attr_fusion_scale=edge_attr_fusion_scale,
+                                          edge_attr_dim=edge_attr_dim)
 
-    def forward(self, x, adj):
+    def forward(self, x, adj, edge_attr=None, use_edge_attr=False):
         # x = self.embeder(x, adj)
-        ass = self.assigner(x, adj)
+        ass = self.assigner(x, adj, edge_attr=edge_attr, use_edge_attr=use_edge_attr)
         support_t = ass.t() @ x
         denorm = (-self.manifold.inner(None, support_t, keepdim=True))
         denorm = denorm.abs().clamp_min(1e-8).sqrt()
         x_par = support_t / denorm
 
-        adj_par = ass.t() @ adj @ ass
+        if adj.is_sparse and torch.is_autocast_enabled():
+            out_dtype = ass.dtype
+            with torch.autocast(device_type="cuda", enabled=False):
+                adj_par = ass.float().t() @ adj.float() @ ass.float()
+            adj_par = adj_par.to(dtype=out_dtype)
+        else:
+            adj_par = ass.t() @ adj @ ass
         idx = adj_par.nonzero().t()
         adj_par = torch.sparse_coo_tensor(idx, adj_par[idx[0], idx[1]], size=adj_par.shape)
         return x_par, adj_par, ass, x
@@ -225,8 +365,13 @@ class LorentzBoost(nn.Module):
         Returns L(x): [..., d+1] in Lorentz model
         """
         d = self.in_dim - 1
-        beta = self.beta  # ensure |beta| < 1
-        beta_norm_sq = (beta ** 2).sum()
+        # Re-parameterize to keep ||beta|| < 1 and avoid invalid Lorentz factor.
+        beta = torch.tanh(self.beta)
+        beta_norm = torch.norm(beta, p=2)
+        max_norm = 1.0 - 1e-4
+        if beta_norm > max_norm:
+            beta = beta * (max_norm / (beta_norm + 1e-12))
+        beta_norm_sq = (beta ** 2).sum().clamp(max=1.0 - 1e-8)
         gamma = 1.0 / torch.sqrt(1.0 - beta_norm_sq + 1e-8)  # Lorentz factor
 
         # Construct boost matrix L (d+1, d+1)
