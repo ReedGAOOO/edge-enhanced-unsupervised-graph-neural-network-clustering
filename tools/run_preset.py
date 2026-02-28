@@ -11,6 +11,16 @@ DATASET_MAX_NUMS = {
     "pubmed": 5,
     "computers": 12,
     "photo": 10,
+    "entities_aifb": 16,
+    "entities_mutag": 16,
+    "entities_bgs": 16,
+    "entities_am": 16,
+    "entities_bgs_top10k": 16,
+    "entities_am_top10k": 16,
+    "dblp_magnn_author": 12,
+    "dblp_magnn_author_v2": 12,
+    "fraud_amazon_union": 2,
+    "fraud_yelp_homo": 2,
 }
 
 PRESET_MAP = {
