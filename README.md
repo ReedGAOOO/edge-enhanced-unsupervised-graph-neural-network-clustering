@@ -35,96 +35,6 @@ python3 tools/run_preset.py --preset baseline_v1 --dataset cora --seed 0 --gpu 0
 python3 tools/run_preset.py --list_presets
 ```
 
-## Dataset Guide (Type, Location, Commands)
-
-All data is expected under repo-local `data/` (default `--root_path data`).
-
-### 1) Auto-download datasets (no manual file placement)
-
-These run directly and are downloaded by PyG loaders when missing:
-
-- `cora`, `citeseer`, `pubmed`, `computers`, `photo`
-
-```bash
-python3 tools/run_preset.py --dataset cora --seed 0 --gpu 0
-```
-
-### 2) Raw-source datasets that need conversion first
-
-Place raw files in the indicated folder, then run conversion:
-
-1. PyG Entities (`AIFB/MUTAG/BGS/AM`)
-- raw: auto-downloaded by script
-- output: `data/entities_*`
-
-```bash
-python3 tools/prepare_pyg_entities_datasets.py --root data --out_root data --datasets AIFB,MUTAG,BGS,AM
-```
-
-2. PyG DBLP (MAGNN-style author graph)
-- raw: auto-downloaded by script
-- output: `data/dblp_magnn_author` or `data/dblp_magnn_author_v2`
-
-```bash
-python3 tools/prepare_pyg_dblp_magnn_dataset.py --root data/pyg_dblp --out_root data --name dblp_magnn_author_v2 --mode v2
-```
-
-3. Fraud Amazon/Yelp
-- raw expected: `data/FraudAmazon/Amazon.mat`, `data/FraudYelp/YelpChi.mat`
-- output: `data/fraud_amazon_union`, `data/fraud_yelp_homo`
-
-```bash
-python3 tools/prepare_fraud_datasets.py --out_root data --datasets amazon,yelp --base_mode auto
-```
-
-4. Bitcoin WSN
-- raw expected: CSVs under `data/Bitcoin_WSN/data-wsn/`
-- output: `data/bitcoin_wsn_*`
-
-```bash
-python3 tools/prepare_bitcoin_wsn_datasets.py --src_dir data/Bitcoin_WSN/data-wsn --out_root data --datasets otc,alpha,rfa,wikisigned,epinion
-```
-
-5. Urban plot graph
-- raw expected: `data/urban_network_datasets/<city>/...`
-- output: `data/urban_<city>_plot`
-
-```bash
-python3 tools/prepare_urban_plot_graph.py --city beijing --urban_root data/urban_network_datasets --out_root data --dataset_name urban_beijing_plot --topk_per_node 32
-```
-
-### 3) Custom dataset format (manual placement)
-
-Create `data/<dataset_name>/` with sparse-format files:
-
-```text
-<name>_edge_index.npy   # [2, E], required
-<name>_feat.npy         # [N, F], required
-<name>_label.npy        # [N], required
-<name>_edge_weight.npy  # [E], optional
-<name>_edge_attr.npy    # [E, D], optional
-<name>_meta.json        # optional
-```
-
-Recommended placement for your own datasets:
-
-- Small/medium datasets: `data/<dataset_name>/`
-- Multiple private datasets: `data/custom/<dataset_name>/` (and run with `--root_path data/custom`)
-- Very large datasets on another disk: keep them outside repo and create a symlink into `data/`
-
-Then run:
-
-```bash
-# If data is placed under data/<dataset_name>/
-python3 tools/run_preset.py --dataset <dataset_name> --max_nums 12 --seed 0 --gpu 0
-
-# If data is placed under data/custom/<dataset_name>/
-python3 main.py --dataset <dataset_name> --root_path data/custom --max_nums 12 --gpu 0 --edge_variant V20
-
-# Example (replace with your real name)
-python3 tools/run_preset.py --dataset my_graph_v1 --max_nums 12 --seed 0 --gpu 0
-```
-
 ## Baseline vs G15 vs G20
 
 ### Structural comparison
@@ -283,6 +193,95 @@ python3 tools/run_preset.py --dataset my_graph_v1 --max_nums 12 --seed 0 --gpu 0
   X_parent = S^T X_current
   A_parent = S^T A_current S
   objective = SI-loss(on A*_si hierarchy) + edge_reg
+```
+## Dataset Guide (Type, Location, Commands)
+
+All data is expected under repo-local `data/` (default `--root_path data`).
+
+### 1) Auto-download datasets (no manual file placement)
+
+These run directly and are downloaded by PyG loaders when missing:
+
+- `cora`, `citeseer`, `pubmed`, `computers`, `photo`
+
+```bash
+python3 tools/run_preset.py --dataset cora --seed 0 --gpu 0
+```
+
+### 2) Raw-source datasets that need conversion first
+
+Place raw files in the indicated folder, then run conversion:
+
+1. PyG Entities (`AIFB/MUTAG/BGS/AM`)
+- raw: auto-downloaded by script
+- output: `data/entities_*`
+
+```bash
+python3 tools/prepare_pyg_entities_datasets.py --root data --out_root data --datasets AIFB,MUTAG,BGS,AM
+```
+
+2. PyG DBLP (MAGNN-style author graph)
+- raw: auto-downloaded by script
+- output: `data/dblp_magnn_author` or `data/dblp_magnn_author_v2`
+
+```bash
+python3 tools/prepare_pyg_dblp_magnn_dataset.py --root data/pyg_dblp --out_root data --name dblp_magnn_author_v2 --mode v2
+```
+
+3. Fraud Amazon/Yelp
+- raw expected: `data/FraudAmazon/Amazon.mat`, `data/FraudYelp/YelpChi.mat`
+- output: `data/fraud_amazon_union`, `data/fraud_yelp_homo`
+
+```bash
+python3 tools/prepare_fraud_datasets.py --out_root data --datasets amazon,yelp --base_mode auto
+```
+
+4. Bitcoin WSN
+- raw expected: CSVs under `data/Bitcoin_WSN/data-wsn/`
+- output: `data/bitcoin_wsn_*`
+
+```bash
+python3 tools/prepare_bitcoin_wsn_datasets.py --src_dir data/Bitcoin_WSN/data-wsn --out_root data --datasets otc,alpha,rfa,wikisigned,epinion
+```
+
+5. Urban plot graph
+- raw expected: `data/urban_network_datasets/<city>/...`
+- output: `data/urban_<city>_plot`
+
+```bash
+python3 tools/prepare_urban_plot_graph.py --city beijing --urban_root data/urban_network_datasets --out_root data --dataset_name urban_beijing_plot --topk_per_node 32
+```
+
+### 3) Custom dataset format (manual placement)
+
+Create `data/<dataset_name>/` with sparse-format files:
+
+```text
+<name>_edge_index.npy   # [2, E], required
+<name>_feat.npy         # [N, F], required
+<name>_label.npy        # [N], required
+<name>_edge_weight.npy  # [E], optional
+<name>_edge_attr.npy    # [E, D], optional
+<name>_meta.json        # optional
+```
+
+Recommended placement for your own datasets:
+
+- Small/medium datasets: `data/<dataset_name>/`
+- Multiple private datasets: `data/custom/<dataset_name>/` (and run with `--root_path data/custom`)
+- Very large datasets on another disk: keep them outside repo and create a symlink into `data/`
+
+Then run:
+
+```bash
+# If data is placed under data/<dataset_name>/
+python3 tools/run_preset.py --dataset <dataset_name> --max_nums 12 --seed 0 --gpu 0
+
+# If data is placed under data/custom/<dataset_name>/
+python3 main.py --dataset <dataset_name> --root_path data/custom --max_nums 12 --gpu 0 --edge_variant V20
+
+# Example (replace with your real name)
+python3 tools/run_preset.py --dataset my_graph_v1 --max_nums 12 --seed 0 --gpu 0
 ```
 
 ## Why custom datasets are necessary
