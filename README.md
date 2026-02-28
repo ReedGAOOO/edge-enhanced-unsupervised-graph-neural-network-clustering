@@ -13,15 +13,103 @@ Unsupervised graph clustering built on DSE/LSEnet, with edge-aware variants cent
 ## Quick Start
 
 ```bash
-cd /home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering
+# 1) clone
+git clone <YOUR_REPO_URL>
+cd edge-enhanced-unsupervised-graph-neural-network-clustering
 
-# Default run (now G20)
+# 2) environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -r requirements.txt
+
+# 3) default run (G20)
 python3 tools/run_preset.py --dataset cora --seed 0 --gpu 0
 
-# Explicit presets
+# optional: explicit presets
 python3 tools/run_preset.py --preset g20_se_consistent_main --dataset cora --seed 0 --gpu 0
 python3 tools/run_preset.py --preset g15_echf_main --dataset cora --seed 0 --gpu 0
 python3 tools/run_preset.py --preset baseline_v1 --dataset cora --seed 0 --gpu 0
+
+# optional: show all preset names
+python3 tools/run_preset.py --list_presets
+```
+
+## Dataset Guide (Type, Location, Commands)
+
+All data is expected under repo-local `data/` (default `--root_path data`).
+
+### 1) Auto-download datasets (no manual file placement)
+
+These run directly and are downloaded by PyG loaders when missing:
+
+- `cora`, `citeseer`, `pubmed`, `computers`, `photo`
+
+```bash
+python3 tools/run_preset.py --dataset cora --seed 0 --gpu 0
+```
+
+### 2) Raw-source datasets that need conversion first
+
+Place raw files in the indicated folder, then run conversion:
+
+1. PyG Entities (`AIFB/MUTAG/BGS/AM`)
+- raw: auto-downloaded by script
+- output: `data/entities_*`
+
+```bash
+python3 tools/prepare_pyg_entities_datasets.py --root data --out_root data --datasets AIFB,MUTAG,BGS,AM
+```
+
+2. PyG DBLP (MAGNN-style author graph)
+- raw: auto-downloaded by script
+- output: `data/dblp_magnn_author` or `data/dblp_magnn_author_v2`
+
+```bash
+python3 tools/prepare_pyg_dblp_magnn_dataset.py --root data/pyg_dblp --out_root data --name dblp_magnn_author_v2 --mode v2
+```
+
+3. Fraud Amazon/Yelp
+- raw expected: `data/FraudAmazon/Amazon.mat`, `data/FraudYelp/YelpChi.mat`
+- output: `data/fraud_amazon_union`, `data/fraud_yelp_homo`
+
+```bash
+python3 tools/prepare_fraud_datasets.py --out_root data --datasets amazon,yelp --base_mode auto
+```
+
+4. Bitcoin WSN
+- raw expected: CSVs under `data/Bitcoin_WSN/data-wsn/`
+- output: `data/bitcoin_wsn_*`
+
+```bash
+python3 tools/prepare_bitcoin_wsn_datasets.py --src_dir data/Bitcoin_WSN/data-wsn --out_root data --datasets otc,alpha,rfa,wikisigned,epinion
+```
+
+5. Urban plot graph
+- raw expected: `data/urban_network_datasets/<city>/...`
+- output: `data/urban_<city>_plot`
+
+```bash
+python3 tools/prepare_urban_plot_graph.py --city beijing --urban_root data/urban_network_datasets --out_root data --dataset_name urban_beijing_plot --topk_per_node 32
+```
+
+### 3) Custom dataset format (manual placement)
+
+Create `data/<dataset_name>/` with sparse-format files:
+
+```text
+<name>_edge_index.npy   # [2, E], required
+<name>_feat.npy         # [N, F], required
+<name>_label.npy        # [N], required
+<name>_edge_weight.npy  # [E], optional
+<name>_edge_attr.npy    # [E, D], optional
+<name>_meta.json        # optional
+```
+
+Then run:
+
+```bash
+python3 tools/run_preset.py --dataset <dataset_name> --max_nums 12 --seed 0 --gpu 0
 ```
 
 ## Baseline vs G15 vs G20
@@ -306,25 +394,6 @@ python3 tools/run_mechanism_synth_suite.py \
   --gpu 0 \
   --amp_bf16 \
   --resume
-```
-
-## Custom dataset format
-
-Place each dataset under `data/<dataset_name>/` using sparse format:
-
-```text
-<name>_edge_index.npy   # [2, E]
-<name>_edge_weight.npy  # [E] optional
-<name>_edge_attr.npy    # [E, D] optional
-<name>_feat.npy         # [N, F]
-<name>_label.npy        # [N]
-<name>_meta.json        # optional
-```
-
-Run:
-
-```bash
-python3 tools/run_preset.py --dataset your_dataset --max_nums 12 --gpu 0
 ```
 
 ## References
