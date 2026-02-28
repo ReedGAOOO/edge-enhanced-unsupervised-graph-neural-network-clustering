@@ -40,36 +40,148 @@ python3 tools/run_preset.py --preset baseline_v1 --dataset cora --seed 0 --gpu 0
 ### Markdown structure display
 
 ```text
-[Baseline V1]
-X, A
- -> Lorentz leaf embedding
- -> assignment score = -dist(q_i, k_j) on A
- -> soft assignment -> gumbel hardening
- -> hierarchical coarsening (X_parent, A_parent)
- -> SE loss
+[Baseline / V1]
+[Raw Dataset]
+  |- node features: X
+  |- edges: edge_index
+  `- edge_attr (ignored by V1 score path)
+        |
+        v
+[Build Base Graph]
+  A0_msg = normalize(edge_index, edge_weight)
+  A0_si  = edge_index, edge_weight
+        |
+        +--------------------+
+        |                    |
+        v                    v
+[Leaf Embedding Pipeline]    [Original Topology Prior]
+  X --(append 0 dim)--> [0, X]      A0_msg / A0_si
+      --(expmap0)--> X_Lorentz      |
+      --(LorentzGraphConv #1)-->    |
+      --(LorentzGraphConv #2)--> z_leaf
+        |                            |
+        v                            |
+[Learned Augmented Graph from z_leaf]|
+  similarity(z_leaf, z_leaf)         |
+      -> topK + softmax -> A_aug     |
+        |                            |
+        +-------------+--------------+
+                      |
+                      v
+[Mixed Training Graph]
+  A_train_msg = A0_msg + alpha * A_aug
+  A_train_si  = A0_si  + alpha * A_aug
+                      |
+                      v
+[Assignment Core]
+  ass0 = softmax(W * logmap0(z))
+  att  = softmax_j(-dist(q_i, k_j)) on A_train_msg edges
+  ass1 = att @ ass0
+  S    = gumbel_softmax(log(ass1))
+                      |
+                      v
+[Hierarchical Coarsening + SI]
+  X_parent = S^T X_current
+  A_parent = S^T A_current S
+  SI-loss over hierarchy on A_train_si
 ```
 
 ```text
 [G15 / V12]
-X, A, edge_attr
- -> build adj_msg / adj_si + edge_attr
- -> Lorentz leaf embedding
- -> assignment score = -dist(q_i, k_j) + calibrated edge residual
- -> graph_alpha / reliability modulation
- -> hierarchical coarsening (+ optional edge_attr coarsening)
- -> SE loss
+[Raw Dataset]
+  |- node features: X
+  |- edges: edge_index
+  `- edge_attr (native or constructed)
+        |
+        v
+[Data Edge Preparation]
+  edge_weight = hybrid(structural, feature, prior)
+  edge_attr   = standardized(+optional generic append)
+  A0_msg      = normalize(edge_index, edge_weight_msg)
+  A0_si       = edge_index, edge_weight_si
+        |
+        +--------------------+
+        |                    |
+        v                    v
+[Leaf Embedding Pipeline]    [Topology + edge_attr prior]
+  X -> [0,X] -> expmap0 -> LorentzConv x2 -> z_leaf
+        |                                   |
+        v                                   |
+[Learned Augmented Graph]                   |
+  similarity(z_leaf, z_leaf) -> A_aug       |
+        |                                   |
+        +-------------+---------------------+
+                      |
+                      v
+[Mixed Training Graph]
+  A_train_msg = A0_msg + alpha * A_aug
+  A_train_si  = A0_si  + alpha * A_aug
+                      |
+                      v
+[V12 Assignment Core]
+  ass0 = softmax(W * logmap0(z))
+  struct trunk:   -dist(q_i, k_j)
+  edge residual:  reliability(edge_attr) * bias(edge_attr)
+  calibrated mix: graph_alpha + mix_beta
+  score = trunk + gamma * edge_residual
+  att   = softmax_j(score) on A_train_msg
+  S     = gumbel_softmax(log(att @ ass0))
+                      |
+                      v
+[Hierarchical Coarsening + SI]
+  X_parent = S^T X_current
+  A_parent = S^T A_current S
+  edge_attr_parent = pooled edge_attr (if hierarchical on)
+  SI-loss over hierarchy on A_train_si
 ```
 
 ```text
 [G20 / V20]
-X, A, edge_attr
- -> build adj_msg / adj_si + edge_attr
- -> edge_attr -> edge_weight_mapper -> bounded multiplicative factor
- -> reweight adj_si (and optionally adj_msg)
- -> regularize edge factors (edge_reg)
- -> run assignment trunk on reweighted graph
- -> hierarchical coarsening
- -> SE loss + edge_reg
+[Raw Dataset]
+  |- node features: X
+  |- edges: edge_index
+  `- edge_attr (native or constructed)
+        |
+        v
+[Data Edge Preparation]
+  edge_weight + edge_attr -> A0_msg, A0_si
+        |
+        +--------------------+
+        |                    |
+        v                    v
+[Leaf Embedding Pipeline]    [Topology prior]
+  X -> [0,X] -> expmap0 -> LorentzConv x2 -> z_leaf
+        |                                   |
+        v                                   |
+[Learned Augmented Graph]                   |
+  similarity(z_leaf, z_leaf) -> A_aug       |
+        |                                   |
+        +-------------+---------------------+
+                      |
+                      v
+[Mixed Training Graph]
+  A_train_msg = A0_msg + alpha * A_aug
+  A_train_si  = A0_si  + alpha * A_aug
+                      |
+                      v
+[SE-Consistent Edge Integration]
+  align edge_attr to training edges
+  f_ij = exp(clamp(tanh(mapper(edge_attr_ij))))   (bounded > 0)
+  A*_si  = A_train_si  ⊙ f
+  A*_msg = A_train_msg ⊙ f   (optional, apply_to=both)
+  edge_reg = lambda * regularize(log f)
+                      |
+                      v
+[Assignment Core (trunk only)]
+  ass0 = softmax(W * logmap0(z))
+  att  = softmax_j(-dist(q_i, k_j)) on A*_msg
+  S    = gumbel_softmax(log(att @ ass0))
+                      |
+                      v
+[Hierarchical Coarsening + Final Loss]
+  X_parent = S^T X_current
+  A_parent = S^T A_current S
+  objective = SI-loss(on A*_si hierarchy) + edge_reg
 ```
 
 ## Why custom datasets are necessary
