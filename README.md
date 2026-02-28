@@ -14,7 +14,7 @@ Unsupervised graph clustering built on DSE/LSEnet, with edge-aware variants cent
 
 ```bash
 # 1) clone
-git clone <YOUR_REPO_URL>
+git clone https://github.com/ReedGAOOO/edge-enhanced-unsupervised-graph-neural-network-clustering.git
 cd edge-enhanced-unsupervised-graph-neural-network-clustering
 
 # 2) environment
@@ -106,10 +106,23 @@ Create `data/<dataset_name>/` with sparse-format files:
 <name>_meta.json        # optional
 ```
 
+Recommended placement for your own datasets:
+
+- Small/medium datasets: `data/<dataset_name>/`
+- Multiple private datasets: `data/custom/<dataset_name>/` (and run with `--root_path data/custom`)
+- Very large datasets on another disk: keep them outside repo and create a symlink into `data/`
+
 Then run:
 
 ```bash
+# If data is placed under data/<dataset_name>/
 python3 tools/run_preset.py --dataset <dataset_name> --max_nums 12 --seed 0 --gpu 0
+
+# If data is placed under data/custom/<dataset_name>/
+python3 main.py --dataset <dataset_name> --root_path data/custom --max_nums 12 --gpu 0 --edge_variant V20
+
+# Example (replace with your real name)
+python3 tools/run_preset.py --dataset my_graph_v1 --max_nums 12 --seed 0 --gpu 0
 ```
 
 ## Baseline vs G15 vs G20
