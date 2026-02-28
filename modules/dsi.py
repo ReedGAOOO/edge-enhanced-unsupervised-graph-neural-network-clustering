@@ -19,6 +19,10 @@ class DSI(nn.Module):
                  edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0,
                  edge_attr_dim=1,
                  edge_attr_hierarchical=False,
+                 edge_weight_learn_reg_lambda=0.02,
+                 edge_weight_learn_logclip=0.8,
+                 edge_weight_learn_temp=1.0,
+                 edge_weight_learn_apply_to='both',
                  knn_mode='auto', knn_auto_threshold=20000):
         super(DSI, self).__init__()
         self.num_nodes = num_nodes
@@ -52,19 +56,51 @@ class DSI(nn.Module):
         self.edge_variant = str(edge_variant).upper()
         self.knn_mode = str(knn_mode).lower()
         self.knn_auto_threshold = int(knn_auto_threshold)
+        self.edge_weight_learn_reg_lambda = float(max(0.0, edge_weight_learn_reg_lambda))
+        self.edge_weight_learn_logclip = float(max(1e-3, edge_weight_learn_logclip))
+        self.edge_weight_learn_temp = float(max(1e-3, edge_weight_learn_temp))
+        self.edge_weight_learn_apply_to = str(edge_weight_learn_apply_to).lower()
+        if self.edge_weight_learn_apply_to not in {'si_only', 'both'}:
+            self.edge_weight_learn_apply_to = 'both'
+
+        self.last_edge_factor_mean = 1.0
+        self.last_edge_factor_std = 0.0
+        self.last_edge_reg = 0.0
+
+        if self._use_learnable_edge_weight_variant():
+            hidden = max(8, int(edge_attr_hidden_dim))
+            self.edge_weight_mapper = nn.Sequential(
+                nn.Linear(int(max(1, edge_attr_dim)), hidden),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden, 1),
+            )
+        else:
+            self.edge_weight_mapper = None
 
     def set_edge_fusion_gamma(self, gamma: float):
         if hasattr(self.encoder, "set_edge_fusion_gamma"):
             self.encoder.set_edge_fusion_gamma(gamma)
 
     def get_edge_adaptive_stats(self):
+        stats = {"graph_alpha_mean": 1.0, "edge_reliability_mean": 1.0, "edge_mix_beta_mean": 0.0}
         if hasattr(self.encoder, "get_edge_adaptive_stats"):
-            return self.encoder.get_edge_adaptive_stats()
-        return {"graph_alpha_mean": 1.0, "edge_reliability_mean": 1.0, "edge_mix_beta_mean": 0.0}
+            stats = self.encoder.get_edge_adaptive_stats()
+        stats["edge_factor_mean"] = float(self.last_edge_factor_mean)
+        stats["edge_factor_std"] = float(self.last_edge_factor_std)
+        stats["edge_reg"] = float(self.last_edge_reg)
+        return stats
 
     def forward(self, data):
         features = data.x
         adj = getattr(data, "adj_msg", data.adj).clone()
+        if self._use_learnable_edge_weight_variant():
+            adj, _ = self._apply_learned_edge_weight_to_adj(
+                base_adj=getattr(data, "adj_msg", data.adj),
+                target_adj=adj,
+                base_edge_attr=getattr(data, "edge_attr", None),
+                normalize_for_message=True,
+            )
         use_edge_attr = self._use_edge_attr_variant()
         edge_attr = getattr(data, "edge_attr", None) if use_edge_attr else None
         tree_coord_dict, ass_dict, adj_dict = self.encoder(features, adj, edge_attr=edge_attr, use_edge_attr=use_edge_attr)
@@ -73,6 +109,13 @@ class DSI(nn.Module):
     def get_cluster_results(self, data):
         features = data.x
         adj = getattr(data, "adj_msg", data.adj).clone()
+        if self._use_learnable_edge_weight_variant():
+            adj, _ = self._apply_learned_edge_weight_to_adj(
+                base_adj=getattr(data, "adj_msg", data.adj),
+                target_adj=adj,
+                base_edge_attr=getattr(data, "edge_attr", None),
+                normalize_for_message=True,
+            )
         use_edge_attr = self._use_edge_attr_variant()
         edge_attr = getattr(data, "edge_attr", None) if use_edge_attr else None
         coord_dict, ass_dict, _ = self.encoder(features, adj, edge_attr=edge_attr, use_edge_attr=use_edge_attr)
@@ -111,6 +154,7 @@ class DSI(nn.Module):
         return clu_res
 
     def se_loss(self, data, eps=1e-6):
+        self.last_edge_reg = 0.0
         adj_base_msg = getattr(data, "adj_msg", data.adj).clone()
         adj_base_si = getattr(data, "adj_si", adj_base_msg).clone()
 
@@ -129,6 +173,25 @@ class DSI(nn.Module):
         adj_train_msg = (self.alpha * adj_aug + adj_base_msg).coalesce()
         adj_train_si = (self.alpha * adj_aug + adj_base_si).coalesce()
 
+        edge_reg_raw = adj_train_msg.values().new_tensor(0.0)
+        if self._use_learnable_edge_weight_variant():
+            base_edge_attr = getattr(data, "edge_attr", None)
+            adj_train_si, reg_si = self._apply_learned_edge_weight_to_adj(
+                base_adj=adj_base_si,
+                target_adj=adj_train_si,
+                base_edge_attr=base_edge_attr,
+                normalize_for_message=False,
+            )
+            edge_reg_raw = reg_si
+            if self.edge_weight_learn_apply_to == 'both':
+                adj_train_msg, reg_msg = self._apply_learned_edge_weight_to_adj(
+                    base_adj=adj_base_msg,
+                    target_adj=adj_train_msg,
+                    base_edge_attr=base_edge_attr,
+                    normalize_for_message=True,
+                )
+                edge_reg_raw = 0.5 * (reg_si + reg_msg)
+
         use_edge_attr = self._use_edge_attr_variant()
         edge_attr = None
         if use_edge_attr:
@@ -139,10 +202,17 @@ class DSI(nn.Module):
         )
         adj_si_dict = self._build_hierarchy_adj_from_assign(adj_train_si, ass_aug_dict)
         loss = self._si_loss(ass_aug_dict, adj_si_dict, eps)
+        if self._use_learnable_edge_weight_variant() and self.edge_weight_learn_reg_lambda > 0.0:
+            edge_reg = self.edge_weight_learn_reg_lambda * edge_reg_raw
+            self.last_edge_reg = float(edge_reg.detach().item())
+            loss = loss + edge_reg
         return loss
 
     def _use_edge_attr_variant(self) -> bool:
-        return self.edge_variant in {'V6', 'V7', 'V8', 'V12'}
+        return self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13'}
+
+    def _use_learnable_edge_weight_variant(self) -> bool:
+        return self.edge_variant in {'V20'}
 
     @staticmethod
     def _ass_adj_ass(ass: torch.Tensor, adj: torch.Tensor):
@@ -229,10 +299,15 @@ class DSI(nn.Module):
 
     @staticmethod
     def _align_edge_attr_to_adj(base_adj, base_edge_attr, target_adj):
+        target_attr, _ = DSI._align_edge_attr_to_adj_with_mask(base_adj, base_edge_attr, target_adj)
+        return target_attr
+
+    @staticmethod
+    def _align_edge_attr_to_adj_with_mask(base_adj, base_edge_attr, target_adj):
         if base_edge_attr is None:
-            return None
+            return None, None
         if base_edge_attr.numel() == 0:
-            return base_edge_attr
+            return base_edge_attr, None
         base = base_adj.coalesce()
         target = target_adj.coalesce()
         base_idx = base.indices()
@@ -240,7 +315,7 @@ class DSI(nn.Module):
         num_nodes = int(base.size(0))
         base_attr = base_edge_attr.float()
         if base_attr.shape[0] != base_idx.shape[1]:
-            return None
+            return None, None
 
         base_key = base_idx[0].long() * num_nodes + base_idx[1].long()
         target_key = target_idx[0].long() * num_nodes + target_idx[1].long()
@@ -259,7 +334,61 @@ class DSI(nn.Module):
         if matched.any():
             mapped = order[pos[matched]]
             target_attr[matched] = base_attr[mapped]
-        return target_attr
+        return target_attr, matched
+
+    def _edge_factor_from_attr(self, edge_attr: torch.Tensor, matched: torch.Tensor | None):
+        if edge_attr.dim() == 1:
+            edge_attr = edge_attr.unsqueeze(1)
+        edge_attr = edge_attr.float()
+        if self.edge_weight_mapper is None:
+            ones = torch.ones(edge_attr.shape[0], dtype=edge_attr.dtype, device=edge_attr.device)
+            zero = torch.zeros((), dtype=edge_attr.dtype, device=edge_attr.device)
+            return ones, zero
+
+        score = self.edge_weight_mapper(edge_attr).squeeze(-1)
+        score = score / float(self.edge_weight_learn_temp)
+        score = torch.tanh(score) * float(self.edge_weight_learn_logclip)
+
+        if matched is not None and matched.any():
+            score = score - score[matched].mean()
+        else:
+            score = score - score.mean()
+
+        score = score.clamp(-float(self.edge_weight_learn_logclip), float(self.edge_weight_learn_logclip))
+        factor = torch.exp(score)
+        if matched is not None:
+            factor = torch.where(matched, factor, torch.ones_like(factor))
+            eff = matched
+        else:
+            eff = torch.ones_like(factor, dtype=torch.bool)
+
+        if eff.any():
+            reg_anchor = torch.mean(score[eff] ** 2)
+            reg_scale = (factor[eff].mean() - 1.0) ** 2
+            reg = reg_anchor + 0.1 * reg_scale
+            self.last_edge_factor_mean = float(factor[eff].detach().mean().item())
+            self.last_edge_factor_std = float(factor[eff].detach().std(unbiased=False).item())
+        else:
+            reg = factor.new_tensor(0.0)
+            self.last_edge_factor_mean = 1.0
+            self.last_edge_factor_std = 0.0
+        return factor, reg
+
+    def _apply_learned_edge_weight_to_adj(self, base_adj, target_adj, base_edge_attr, normalize_for_message: bool):
+        edge_attr, matched = self._align_edge_attr_to_adj_with_mask(base_adj, base_edge_attr, target_adj)
+        if edge_attr is None or edge_attr.numel() == 0:
+            self.last_edge_factor_mean = 1.0
+            self.last_edge_factor_std = 0.0
+            return target_adj.coalesce(), target_adj.values().new_tensor(0.0)
+
+        tgt = target_adj.coalesce()
+        matched_dev = matched.to(tgt.values().device) if matched is not None else None
+        factor, reg = self._edge_factor_from_attr(edge_attr.to(tgt.values().device), matched_dev)
+        new_val = tgt.values() * factor.to(dtype=tgt.values().dtype, device=tgt.values().device)
+        out = torch.sparse_coo_tensor(tgt.indices(), new_val, size=tgt.size(), device=tgt.device).coalesce()
+        if normalize_for_message:
+            out = self._normalize_sparse_by_degree(out)
+        return out, reg
 
     @staticmethod
     def _sparse_degree_and_diag(adj_k):
@@ -276,6 +405,20 @@ class DSI(nn.Module):
         degree = adj_k.sum(dim=1)
         diag = torch.diagonal(adj_k, dim1=0, dim2=1)
         return degree, diag
+
+    @staticmethod
+    def _normalize_sparse_by_degree(adj_k):
+        coo = adj_k.coalesce()
+        idx = coo.indices()
+        val = coo.values()
+        row = idx[0].long()
+        col = idx[1].long()
+        num_nodes = int(coo.size(0))
+        deg = torch.zeros(num_nodes, dtype=val.dtype, device=val.device)
+        deg.index_add_(0, row, val)
+        deg_inv_sqrt = deg.clamp_min(1e-12).pow(-0.5)
+        norm_val = deg_inv_sqrt[row] * val * deg_inv_sqrt[col]
+        return torch.sparse_coo_tensor(idx, norm_val, size=coo.size(), device=coo.device).coalesce()
 
     def _si_loss(self, ass_dict: dict, adj_dict: dict, eps: float = 1e-6):
         se_loss = 0

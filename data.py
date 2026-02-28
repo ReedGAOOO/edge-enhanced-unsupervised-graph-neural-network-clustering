@@ -188,23 +188,23 @@ def load_data(configs):
         input_prior_weight = torch.ones(edge_index.shape[1], dtype=torch.float32)
     edge_weight = input_prior_weight
 
-    if variant in {'V2', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12'}:
+    if variant in {'V2', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20'}:
         w_struct = build_structural_edge_weight(edge_index, N)
-    if variant in {'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12'}:
+    if variant in {'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20'}:
         w_feat = build_feature_edge_weight(data.x.float(), edge_index, temp=getattr(configs, 'edge_feat_temp', 1.0))
 
     if variant == 'V2':
         edge_weight = w_struct
     elif variant == 'V3':
         edge_weight = w_feat
-    elif variant in {'V4', 'V5', 'V6', 'V7', 'V8', 'V12'}:
+    elif variant in {'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20'}:
         alpha = float(getattr(configs, 'edge_hybrid_alpha', 0.5))
         alpha = max(0.0, min(1.0, alpha))
         edge_weight = alpha * w_feat + (1.0 - alpha) * w_struct
 
     prior_alpha = float(getattr(configs, 'edge_input_prior_alpha', 0.0))
     prior_alpha = max(0.0, min(1.0, prior_alpha))
-    if prior_alpha > 0.0 and variant in {'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12'}:
+    if prior_alpha > 0.0 and variant in {'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20'}:
         edge_weight = (1.0 - prior_alpha) * edge_weight + prior_alpha * input_prior_weight
 
     edge_weight = edge_weight.clamp_min(1e-6)

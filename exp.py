@@ -71,6 +71,10 @@ class Exp:
                 edge_attr_fusion_scale=float(getattr(self.configs, "edge_attr_fusion_scale", 1.0)),
                 edge_attr_dim=edge_attr_dim,
                 edge_attr_hierarchical=bool(getattr(self.configs, "edge_attr_hierarchical", False)),
+                edge_weight_learn_reg_lambda=float(getattr(self.configs, "edge_weight_learn_reg_lambda", 0.02)),
+                edge_weight_learn_logclip=float(getattr(self.configs, "edge_weight_learn_logclip", 0.8)),
+                edge_weight_learn_temp=float(getattr(self.configs, "edge_weight_learn_temp", 1.0)),
+                edge_weight_learn_apply_to=str(getattr(self.configs, "edge_weight_learn_apply_to", "both")),
                 knn_mode=str(getattr(self.configs, "knn_mode", "auto")),
                 knn_auto_threshold=int(getattr(self.configs, "knn_auto_threshold", 20000)),
             ).to(device)
@@ -98,6 +102,12 @@ class Exp:
         pred_cv_stats = self._mean_std([s["pred_cluster_size_cv"] for s in run_stats])
         best_epoch_stats = self._mean_std([s["best_epoch"] for s in run_stats])
         best_loss_stats = self._mean_std([s["best_train_loss"] for s in run_stats])
+        graph_alpha_stats = self._mean_std([s.get("final_graph_alpha", float("nan")) for s in run_stats])
+        edge_rel_stats = self._mean_std([s.get("final_edge_reliability", float("nan")) for s in run_stats])
+        edge_mix_stats = self._mean_std([s.get("final_edge_mix_beta", float("nan")) for s in run_stats])
+        edge_factor_mean_stats = self._mean_std([s.get("final_edge_factor_mean", float("nan")) for s in run_stats])
+        edge_factor_std_stats = self._mean_std([s.get("final_edge_factor_std", float("nan")) for s in run_stats])
+        edge_reg_stats = self._mean_std([s.get("final_edge_reg", float("nan")) for s in run_stats])
 
         logger.info(
             f"NMI: {nmi_stats['mean']}+-{nmi_stats['std']}, "
@@ -123,6 +133,10 @@ class Exp:
             "edge_attr_hidden_dim": int(getattr(self.configs, "edge_attr_hidden_dim", 64)),
             "edge_attr_fusion_scale": float(getattr(self.configs, "edge_attr_fusion_scale", 1.0)),
             "edge_attr_hierarchical": bool(getattr(self.configs, "edge_attr_hierarchical", False)),
+            "edge_weight_learn_reg_lambda": float(getattr(self.configs, "edge_weight_learn_reg_lambda", 0.02)),
+            "edge_weight_learn_logclip": float(getattr(self.configs, "edge_weight_learn_logclip", 0.8)),
+            "edge_weight_learn_temp": float(getattr(self.configs, "edge_weight_learn_temp", 1.0)),
+            "edge_weight_learn_apply_to": str(getattr(self.configs, "edge_weight_learn_apply_to", "both")),
             "edge_attr_weight_blend": float(getattr(self.configs, "edge_attr_weight_blend", 0.0)),
             "edge_attr_weight_temp": float(getattr(self.configs, "edge_attr_weight_temp", 1.0)),
             "edge_attr_weight_apply_to": str(getattr(self.configs, "edge_attr_weight_apply_to", "si_only")),
@@ -156,6 +170,18 @@ class Exp:
             "best_epoch_std": best_epoch_stats["std"],
             "best_train_loss_mean": best_loss_stats["mean"],
             "best_train_loss_std": best_loss_stats["std"],
+            "final_graph_alpha_mean": graph_alpha_stats["mean"],
+            "final_graph_alpha_std": graph_alpha_stats["std"],
+            "final_edge_reliability_mean": edge_rel_stats["mean"],
+            "final_edge_reliability_std": edge_rel_stats["std"],
+            "final_edge_mix_beta_mean": edge_mix_stats["mean"],
+            "final_edge_mix_beta_std": edge_mix_stats["std"],
+            "final_edge_factor_mean_mean": edge_factor_mean_stats["mean"],
+            "final_edge_factor_mean_std": edge_factor_mean_stats["std"],
+            "final_edge_factor_std_mean": edge_factor_std_stats["mean"],
+            "final_edge_factor_std_std": edge_factor_std_stats["std"],
+            "final_edge_reg_mean": edge_reg_stats["mean"],
+            "final_edge_reg_std": edge_reg_stats["std"],
             "selection_rule": "min_train_loss",
             "exp_iters": int(self.configs.exp_iters),
             "epochs": int(self.configs.epochs),
@@ -369,11 +395,14 @@ class Exp:
                 "edge_mix_beta_mean": 0.0,
             }
             if epoch == 1 or epoch == epochs or epoch % train_log_interval == 0:
+                edge_factor = adaptive_stats.get("edge_factor_mean", 1.0)
+                edge_reg = adaptive_stats.get("edge_reg", 0.0)
                 logger.info(
                     f"[Stage2] Epoch {epoch}: loss={loss_value:.4f}, edge_fusion_gamma={curr_gamma:.4f}, "
                     f"graph_alpha={adaptive_stats['graph_alpha_mean']:.4f}, "
                     f"edge_rel={adaptive_stats['edge_reliability_mean']:.4f}, "
-                    f"edge_mix={adaptive_stats.get('edge_mix_beta_mean', 0.0):.4f}"
+                    f"edge_mix={adaptive_stats.get('edge_mix_beta_mean', 0.0):.4f}, "
+                    f"edge_factor={edge_factor:.4f}, edge_reg={edge_reg:.6f}"
                 )
 
             if (epoch % eval_freq == 0) or (epoch == epochs):
@@ -406,6 +435,14 @@ class Exp:
         final_pred = final_eval["predicts"][0] if final_eval["predicts"] else np.array([])
         struct = self._compute_partition_structure_metrics(data, final_pred)
         si_loss = self._si_loss_no_grad(model, data)
+        edge_stats = model.get_edge_adaptive_stats() if hasattr(model, "get_edge_adaptive_stats") else {
+            "graph_alpha_mean": 1.0,
+            "edge_reliability_mean": 1.0,
+            "edge_mix_beta_mean": 0.0,
+            "edge_factor_mean": 1.0,
+            "edge_factor_std": 0.0,
+            "edge_reg": 0.0,
+        }
 
         if np.isnan(final_eval["acc_mean"]):
             logger.info(
@@ -439,4 +476,10 @@ class Exp:
             "pred_cluster_size_cv": float(struct["pred_cluster_size_cv"]),
             "best_epoch": float(best_epoch),
             "best_train_loss": float(best_loss),
+            "final_graph_alpha": float(edge_stats.get("graph_alpha_mean", 1.0)),
+            "final_edge_reliability": float(edge_stats.get("edge_reliability_mean", 1.0)),
+            "final_edge_mix_beta": float(edge_stats.get("edge_mix_beta_mean", 0.0)),
+            "final_edge_factor_mean": float(edge_stats.get("edge_factor_mean", 1.0)),
+            "final_edge_factor_std": float(edge_stats.get("edge_factor_std", 0.0)),
+            "final_edge_reg": float(edge_stats.get("edge_reg", 0.0)),
         }

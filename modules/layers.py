@@ -142,6 +142,12 @@ class LorentzAssignment(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(max(8, int(edge_attr_hidden_dim)), 2),
         )
+        self.edge_attr_lorentz_encoder = nn.Sequential(
+            nn.Linear(int(max(1, edge_attr_dim)), max(8, int(edge_attr_hidden_dim))),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(max(8, int(edge_attr_hidden_dim)), max(1, int(hid_dim) - 1)),
+        )
 
     def set_edge_fusion_gamma(self, gamma: float):
         self.edge_fusion_gamma = float(gamma)
@@ -196,7 +202,7 @@ class LorentzAssignment(nn.Module):
             self.last_reliability_mean = float(reliability.detach().mean().cpu().item())
             self.last_mix_beta = 0.0
             score = score + float(self.edge_fusion_gamma) * graph_alpha * reliability * edge_log
-        elif self.edge_variant in {'V6', 'V7', 'V8', 'V12'} and bool(use_edge_attr) and edge_attr is not None:
+        elif self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13'} and bool(use_edge_attr) and edge_attr is not None:
             if edge_attr.dim() == 1:
                 edge_attr = edge_attr.unsqueeze(1)
             if edge_attr.shape[0] == edge_value.shape[0]:
@@ -253,7 +259,7 @@ class LorentzAssignment(nn.Module):
                     struct_term = struct_rel * torch.tanh(edge_log)
                     attr_term_raw = attr_rel * torch.tanh(attr_bias)
                     attr_term = (1.0 - mix_beta) * struct_term + mix_beta * attr_term_raw
-                else:
+                elif self.edge_variant == 'V12':
                     # V12: keep V5 as stable trunk and add calibrated edge-attribute residual.
                     struct_rel, _ = self._struct_reliability_and_log(edge_value)
                     attr_rel = attr_gate
@@ -278,6 +284,32 @@ class LorentzAssignment(nn.Module):
                     residual = attr_rel * attr_bias
                     residual = residual / residual.std(unbiased=False).clamp_min(1e-6)
                     attr_term = struct_rel * edge_log + mix_beta * residual
+                else:
+                    # V13: map edge attributes into Lorentz space and fuse as geometric residual.
+                    reliability = attr_gate
+                    if self.edge_confidence_quantile > 0.0:
+                        qv = float(min(0.999, max(0.0, self.edge_confidence_quantile)))
+                        threshold = torch.quantile(reliability.detach(), qv)
+                        reliability = reliability * (reliability >= threshold).to(reliability.dtype)
+                    graph_alpha = self._graph_alpha(reliability, fallback_dtype=score.dtype, fallback_device=score.device)
+                    self.last_mix_beta = 1.0
+
+                    # Build edge points in Lorentz model from edge_attr tangent vectors.
+                    edge_spatial = self.edge_attr_lorentz_encoder(edge_attr)
+                    edge_tangent = torch.cat(
+                        [torch.zeros((edge_spatial.shape[0], 1), dtype=edge_spatial.dtype, device=edge_spatial.device), edge_spatial],
+                        dim=1,
+                    )
+                    edge_lorentz = self.manifold.expmap0(edge_tangent)
+
+                    # Pair node endpoints into a Lorentz midpoint surrogate.
+                    node_pair = q[src] + k[dst]
+                    node_denorm = (-self.manifold.inner(None, node_pair, keepdim=True)).abs().clamp_min(1e-8).sqrt()
+                    node_pair = node_pair / node_denorm
+
+                    edge_geo = 2 + 2 * self.manifold.inner(edge_lorentz, node_pair, keepdim=False)
+                    edge_geo = (edge_geo - edge_geo.mean()) / edge_geo.std(unbiased=False).clamp_min(1e-6)
+                    attr_term = reliability * (0.7 * torch.tanh(edge_geo) + 0.3 * torch.tanh(attr_bias))
                 score = score + float(self.edge_fusion_gamma) * self.edge_attr_fusion_scale * graph_alpha * attr_term
                 self.last_graph_alpha = float(graph_alpha.detach().cpu().item())
                 self.last_reliability_mean = float(reliability.detach().mean().cpu().item())

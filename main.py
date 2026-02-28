@@ -54,13 +54,15 @@ parser.add_argument('--knn_mode', type=str, default='auto', choices=['auto', 'de
 parser.add_argument('--knn_auto_threshold', type=int, default=20000,
                     help='When knn_mode=auto and num_nodes exceeds this threshold, switch to edge mode.')
 parser.add_argument("--epsInt", type=int, default=8)
-parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12'],
+parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20'],
                     help='V1: plain adjacency; V2: structural pre-weight; '
                          'V3: feature-similarity pre-weight; V4: hybrid pre-weight; '
                          'V5: hybrid + attention-stage edge fusion; '
                          'V6: edge-attr gated fusion; V7: edge-attr gated fusion + alignment residual; '
                          'V8: calibrated mixture of structural/edge-attr fusion; '
-                         'V12: V5 residual fusion with calibrated edge-attr correction.')
+                         'V12: V5 residual fusion with calibrated edge-attr correction; '
+                         'V13: Lorentzized edge-attr residual fusion on assignment score; '
+                         'V20: SE-consistent learnable edge weighting with bounded regularization.')
 parser.add_argument('--edge_hybrid_alpha', type=float, default=0.5,
                     help='Feature weight in hybrid edge variant V4/V5.')
 parser.add_argument('--edge_feat_temp', type=float, default=1.0,
@@ -99,6 +101,14 @@ parser.add_argument('--edge_attr_weight_apply_to', type=str, default='si_only', 
                     help='Path-A: apply edge-attr-derived weights to SI graph only, or both SI and message graph.')
 parser.add_argument('--edge_attr_hierarchical', action='store_true',
                     help='Path-B: propagate/coarsen edge attributes across hierarchy levels.')
+parser.add_argument('--edge_weight_learn_reg_lambda', type=float, default=0.02,
+                    help='V20: regularization strength for learnable edge-weight log-ratio.')
+parser.add_argument('--edge_weight_learn_logclip', type=float, default=0.8,
+                    help='V20: absolute clip on learned edge log-ratio before exp mapping.')
+parser.add_argument('--edge_weight_learn_temp', type=float, default=1.0,
+                    help='V20: temperature on learned edge score before tanh clipping.')
+parser.add_argument('--edge_weight_learn_apply_to', type=str, default='both', choices=['si_only', 'both'],
+                    help='V20: apply learned edge weighting to SI graph only, or both SI/message graphs.')
 parser.add_argument('--known_only_eval', action='store_true',
                     help='For datasets with explicit unknown label mapping, remap unknown labels to -1 during evaluation.')
 parser.add_argument('--train_log_interval', type=int, default=1,

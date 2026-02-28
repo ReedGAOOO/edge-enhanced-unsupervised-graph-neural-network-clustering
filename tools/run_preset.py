@@ -33,6 +33,8 @@ PRESET_MAP = {
     "g15_echf_main": "configs/presets/g15_echf_main.json",
     "g15_echf_noadapt": "configs/presets/g15_echf_noadapt.json",
     "g17_v5_temp15": "configs/presets/g17_v5_temp15.json",
+    "g13_edge_lorentz_l1": "configs/presets/g13_edge_lorentz_l1.json",
+    "g20_se_consistent_main": "configs/presets/g20_se_consistent_main.json",
     # Backward-compatible aliases.
     "b15_pathb_v12_hier": "configs/presets/b15_pathb_v12_hier.json",
     "g17_temp1p5_mainline": "configs/presets/g17_temp1p5_mainline.json",
@@ -57,7 +59,7 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
 
     parser = argparse.ArgumentParser(description="Run edge-fusion preset")
-    parser.add_argument("--preset", type=str, default="g15_echf_main")
+    parser.add_argument("--preset", type=str, default="g20_se_consistent_main")
     parser.add_argument("--dataset", type=str, default="cora")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--gpu", type=int, default=0)
@@ -149,6 +151,14 @@ def main() -> None:
         str(preset.get("edge_attr_weight_temp", 1.0)),
         "--edge_attr_weight_apply_to",
         str(preset.get("edge_attr_weight_apply_to", "si_only")),
+        "--edge_weight_learn_reg_lambda",
+        str(preset.get("edge_weight_learn_reg_lambda", 0.02)),
+        "--edge_weight_learn_logclip",
+        str(preset.get("edge_weight_learn_logclip", 0.8)),
+        "--edge_weight_learn_temp",
+        str(preset.get("edge_weight_learn_temp", 1.0)),
+        "--edge_weight_learn_apply_to",
+        str(preset.get("edge_weight_learn_apply_to", "both")),
     ]
 
     if preset.get("edge_fusion_gamma_start", None) is not None:
