@@ -48,7 +48,7 @@ python3 tools/run_preset.py --list_presets
 | Internal interpretable stats | N/A | `graph_alpha`, `edge_reliability`, `edge_mix_beta` | `edge_factor_mean/std`, `edge_reg` |
 | Key files | `modules/layers.py`, `modules/dsi.py` | `modules/layers.py` (V12), `modules/model.py` (hier edge attr) | `modules/dsi.py` (V20 mapper + SI-consistent weighting) |
 
-### Markdown structure display
+### Structure display (Baseline / G15(old mainline) / G20(current mainline))
 
 ```text
 [Baseline / V1]
@@ -312,7 +312,7 @@ python3 tools/prepare_mechanism_synth_datasets.py \
   --data_seeds 0
 ```
 
-## Experiment evidence (current)
+## Experiment
 
 ### Full controlled benchmark (108 runs)
 
