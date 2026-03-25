@@ -30,7 +30,101 @@ class Exp:
         arr = np.array(vals, dtype=np.float64)
         if arr.size == 0:
             return {"mean": float("nan"), "std": float("nan")}
-        return {"mean": float(np.nanmean(arr)), "std": float(np.nanstd(arr))}
+        valid = arr[~np.isnan(arr)]
+        if valid.size == 0:
+            return {"mean": float("nan"), "std": float("nan")}
+        return {"mean": float(valid.mean()), "std": float(valid.std())}
+
+    def _edge_branch_diagnostics(self, edge_stats: Dict[str, float]) -> Dict[str, float]:
+        variant = str(getattr(self.configs, "edge_variant", "V1")).upper()
+        diag = {
+            "diag_factor_live": float("nan"),
+            "diag_dual_live": float("nan"),
+            "diag_msg_live": float("nan"),
+            "diag_assign_live": float("nan"),
+            "diag_hier_live": float("nan"),
+            "diag_aug_live": float("nan"),
+            "diag_factor_shift": float("nan"),
+            "diag_dual_gap": float("nan"),
+            "diag_msg_gate_shift": float("nan"),
+            "diag_aug_bias_abs": float("nan"),
+            "diag_dead_branch_count": 0.0,
+            "diag_required_branch_count": 0.0,
+            "diag_all_required_live": 1.0,
+        }
+
+        required = 0
+        dead = 0
+
+        if variant in {"V20", "V30", "V31", "V32", "V33"}:
+            factor_shift = abs(float(edge_stats.get("edge_factor_mean", 1.0)) - 1.0)
+            factor_sigma = abs(float(edge_stats.get("edge_factor_std", 0.0)))
+            edge_reg = abs(float(edge_stats.get("edge_reg", 0.0)))
+            factor_live = float((factor_shift > 5e-3) or (factor_sigma > 5e-3) or (edge_reg > 1e-4))
+            diag["diag_factor_live"] = factor_live
+            diag["diag_factor_shift"] = factor_shift
+            required += 1
+            dead += int(factor_live < 0.5)
+
+        if variant in {"V30", "V31", "V32", "V33"}:
+            factor_msg = float(edge_stats.get("edge_factor_msg_mean", 1.0))
+            factor_si = float(edge_stats.get("edge_factor_si_mean", 1.0))
+            dual_gap = abs(
+                factor_msg - factor_si
+            )
+            dual_live = float(
+                (dual_gap > 2e-3)
+                or ((abs(factor_msg - 1.0) > 5e-3) and (abs(factor_si - 1.0) > 5e-3))
+            )
+            diag["diag_dual_live"] = dual_live
+            diag["diag_dual_gap"] = dual_gap
+            required += 1
+            dead += int(dual_live < 0.5)
+
+        if bool(getattr(self.configs, "edge_msg_conditioned", False)):
+            msg_shift = abs(float(edge_stats.get("msg_gate_factor_mean", 1.0)) - 1.0)
+            msg_sigma = abs(float(edge_stats.get("msg_gate_factor_std", 0.0)))
+            msg_live = float((msg_shift > 5e-3) or (msg_sigma > 5e-3))
+            diag["diag_msg_live"] = msg_live
+            diag["diag_msg_gate_shift"] = msg_shift
+            required += 1
+            dead += int(msg_live < 0.5)
+
+        if variant in {"V31", "V32", "V33"}:
+            graph_alpha = float(edge_stats.get("graph_alpha_mean", 1.0))
+            edge_rel = float(edge_stats.get("edge_reliability_mean", 1.0))
+            edge_mix = float(edge_stats.get("edge_mix_beta_mean", 0.0))
+            assign_live = float(
+                (abs(graph_alpha - 1.0) > 5e-2)
+                or (abs(edge_rel - 1.0) > 5e-2)
+                or (abs(edge_mix) > 5e-2)
+            )
+            diag["diag_assign_live"] = assign_live
+            required += 1
+            dead += int(assign_live < 0.5)
+
+        if variant in {"V32", "V33"} and bool(getattr(self.configs, "edge_attr_hierarchical", False)):
+            hier_levels = float(edge_stats.get("hier_edge_levels_active_ratio", 0.0))
+            hier_nonzero = float(edge_stats.get("hier_edge_nonzero_ratio", 0.0))
+            hier_mean_abs = float(edge_stats.get("hier_edge_mean_abs", 0.0))
+            hier_live = float((hier_levels > 0.0) and ((hier_nonzero > 5e-2) or (hier_mean_abs > 1e-4)))
+            diag["diag_hier_live"] = hier_live
+            required += 1
+            dead += int(hier_live < 0.5)
+
+        if variant == "V33" and float(getattr(self.configs, "edge_aug_prior_scale", 0.0)) > 0.0:
+            aug_mean = float(edge_stats.get("edge_aug_bias_mean", 0.0))
+            aug_std = float(edge_stats.get("edge_aug_bias_std", 0.0))
+            aug_live = float((abs(aug_mean) > 1e-4) or (aug_std > 1e-3))
+            diag["diag_aug_live"] = aug_live
+            diag["diag_aug_bias_abs"] = abs(aug_mean)
+            required += 1
+            dead += int(aug_live < 0.5)
+
+        diag["diag_dead_branch_count"] = float(dead)
+        diag["diag_required_branch_count"] = float(required)
+        diag["diag_all_required_live"] = float(dead == 0) if required > 0 else 1.0
+        return diag
 
     def train(self):
         logger = create_logger(self.configs.log_path)
@@ -71,10 +165,20 @@ class Exp:
                 edge_attr_fusion_scale=float(getattr(self.configs, "edge_attr_fusion_scale", 1.0)),
                 edge_attr_dim=edge_attr_dim,
                 edge_attr_hierarchical=bool(getattr(self.configs, "edge_attr_hierarchical", False)),
+                edge_attr_pool_topk=int(getattr(self.configs, "edge_attr_pool_topk", 1)),
+                edge_msg_conditioned=bool(getattr(self.configs, "edge_msg_conditioned", False)),
+                edge_msg_gate_scale=float(getattr(self.configs, "edge_msg_gate_scale", 0.35)),
+                edge_msg_matched_only=bool(getattr(self.configs, "edge_msg_matched_only", False)),
+                edge_msg_confidence_gate=bool(getattr(self.configs, "edge_msg_confidence_gate", False)),
+                edge_msg_confidence_temp=float(getattr(self.configs, "edge_msg_confidence_temp", 1.0)),
+                edge_attr_pool_confidence=bool(getattr(self.configs, "edge_attr_pool_confidence", False)),
+                edge_attr_pool_conf_power=float(getattr(self.configs, "edge_attr_pool_conf_power", 1.0)),
                 edge_weight_learn_reg_lambda=float(getattr(self.configs, "edge_weight_learn_reg_lambda", 0.02)),
                 edge_weight_learn_logclip=float(getattr(self.configs, "edge_weight_learn_logclip", 0.8)),
                 edge_weight_learn_temp=float(getattr(self.configs, "edge_weight_learn_temp", 1.0)),
                 edge_weight_learn_apply_to=str(getattr(self.configs, "edge_weight_learn_apply_to", "both")),
+                edge_aug_prior_scale=float(getattr(self.configs, "edge_aug_prior_scale", 0.0)),
+                edge_aug_prior_mode=str(getattr(self.configs, "edge_aug_prior_mode", "raw")),
                 knn_mode=str(getattr(self.configs, "knn_mode", "auto")),
                 knn_auto_threshold=int(getattr(self.configs, "knn_auto_threshold", 20000)),
             ).to(device)
@@ -107,7 +211,26 @@ class Exp:
         edge_mix_stats = self._mean_std([s.get("final_edge_mix_beta", float("nan")) for s in run_stats])
         edge_factor_mean_stats = self._mean_std([s.get("final_edge_factor_mean", float("nan")) for s in run_stats])
         edge_factor_std_stats = self._mean_std([s.get("final_edge_factor_std", float("nan")) for s in run_stats])
+        edge_factor_msg_stats = self._mean_std([s.get("final_edge_factor_msg_mean", float("nan")) for s in run_stats])
+        edge_factor_msg_std_stats = self._mean_std([s.get("final_edge_factor_msg_std", float("nan")) for s in run_stats])
+        edge_factor_si_stats = self._mean_std([s.get("final_edge_factor_si_mean", float("nan")) for s in run_stats])
+        edge_factor_si_std_stats = self._mean_std([s.get("final_edge_factor_si_std", float("nan")) for s in run_stats])
+        msg_gate_factor_stats = self._mean_std([s.get("final_msg_gate_factor_mean", float("nan")) for s in run_stats])
+        msg_gate_factor_std_stats = self._mean_std([s.get("final_msg_gate_factor_std", float("nan")) for s in run_stats])
+        edge_aug_stats = self._mean_std([s.get("final_edge_aug_bias_mean", float("nan")) for s in run_stats])
+        edge_aug_std_stats = self._mean_std([s.get("final_edge_aug_bias_std", float("nan")) for s in run_stats])
         edge_reg_stats = self._mean_std([s.get("final_edge_reg", float("nan")) for s in run_stats])
+        hier_levels_stats = self._mean_std([s.get("final_hier_edge_levels_active_ratio", float("nan")) for s in run_stats])
+        hier_nonzero_stats = self._mean_std([s.get("final_hier_edge_nonzero_ratio", float("nan")) for s in run_stats])
+        hier_abs_stats = self._mean_std([s.get("final_hier_edge_mean_abs", float("nan")) for s in run_stats])
+        diag_factor_live_stats = self._mean_std([s.get("diag_factor_live", float("nan")) for s in run_stats])
+        diag_dual_live_stats = self._mean_std([s.get("diag_dual_live", float("nan")) for s in run_stats])
+        diag_msg_live_stats = self._mean_std([s.get("diag_msg_live", float("nan")) for s in run_stats])
+        diag_assign_live_stats = self._mean_std([s.get("diag_assign_live", float("nan")) for s in run_stats])
+        diag_hier_live_stats = self._mean_std([s.get("diag_hier_live", float("nan")) for s in run_stats])
+        diag_aug_live_stats = self._mean_std([s.get("diag_aug_live", float("nan")) for s in run_stats])
+        diag_dead_count_stats = self._mean_std([s.get("diag_dead_branch_count", float("nan")) for s in run_stats])
+        diag_all_live_stats = self._mean_std([s.get("diag_all_required_live", float("nan")) for s in run_stats])
 
         logger.info(
             f"NMI: {nmi_stats['mean']}+-{nmi_stats['std']}, "
@@ -133,10 +256,20 @@ class Exp:
             "edge_attr_hidden_dim": int(getattr(self.configs, "edge_attr_hidden_dim", 64)),
             "edge_attr_fusion_scale": float(getattr(self.configs, "edge_attr_fusion_scale", 1.0)),
             "edge_attr_hierarchical": bool(getattr(self.configs, "edge_attr_hierarchical", False)),
+            "edge_attr_pool_topk": int(getattr(self.configs, "edge_attr_pool_topk", 1)),
+            "edge_msg_conditioned": bool(getattr(self.configs, "edge_msg_conditioned", False)),
+            "edge_msg_gate_scale": float(getattr(self.configs, "edge_msg_gate_scale", 0.35)),
+            "edge_msg_matched_only": bool(getattr(self.configs, "edge_msg_matched_only", False)),
+            "edge_msg_confidence_gate": bool(getattr(self.configs, "edge_msg_confidence_gate", False)),
+            "edge_msg_confidence_temp": float(getattr(self.configs, "edge_msg_confidence_temp", 1.0)),
+            "edge_attr_pool_confidence": bool(getattr(self.configs, "edge_attr_pool_confidence", False)),
+            "edge_attr_pool_conf_power": float(getattr(self.configs, "edge_attr_pool_conf_power", 1.0)),
             "edge_weight_learn_reg_lambda": float(getattr(self.configs, "edge_weight_learn_reg_lambda", 0.02)),
             "edge_weight_learn_logclip": float(getattr(self.configs, "edge_weight_learn_logclip", 0.8)),
             "edge_weight_learn_temp": float(getattr(self.configs, "edge_weight_learn_temp", 1.0)),
             "edge_weight_learn_apply_to": str(getattr(self.configs, "edge_weight_learn_apply_to", "both")),
+            "edge_aug_prior_scale": float(getattr(self.configs, "edge_aug_prior_scale", 0.0)),
+            "edge_aug_prior_mode": str(getattr(self.configs, "edge_aug_prior_mode", "raw")),
             "edge_attr_weight_blend": float(getattr(self.configs, "edge_attr_weight_blend", 0.0)),
             "edge_attr_weight_temp": float(getattr(self.configs, "edge_attr_weight_temp", 1.0)),
             "edge_attr_weight_apply_to": str(getattr(self.configs, "edge_attr_weight_apply_to", "si_only")),
@@ -180,8 +313,39 @@ class Exp:
             "final_edge_factor_mean_std": edge_factor_mean_stats["std"],
             "final_edge_factor_std_mean": edge_factor_std_stats["mean"],
             "final_edge_factor_std_std": edge_factor_std_stats["std"],
+            "final_edge_factor_msg_mean": edge_factor_msg_stats["mean"],
+            "final_edge_factor_msg_std": edge_factor_msg_stats["std"],
+            "final_edge_factor_msg_sigma_mean": edge_factor_msg_std_stats["mean"],
+            "final_edge_factor_msg_sigma_std": edge_factor_msg_std_stats["std"],
+            "final_edge_factor_si_mean": edge_factor_si_stats["mean"],
+            "final_edge_factor_si_std": edge_factor_si_stats["std"],
+            "final_edge_factor_si_sigma_mean": edge_factor_si_std_stats["mean"],
+            "final_edge_factor_si_sigma_std": edge_factor_si_std_stats["std"],
+            "final_msg_gate_factor_mean": msg_gate_factor_stats["mean"],
+            "final_msg_gate_factor_std": msg_gate_factor_stats["std"],
+            "final_msg_gate_factor_sigma_mean": msg_gate_factor_std_stats["mean"],
+            "final_msg_gate_factor_sigma_std": msg_gate_factor_std_stats["std"],
+            "final_edge_aug_bias_mean": edge_aug_stats["mean"],
+            "final_edge_aug_bias_std": edge_aug_std_stats["mean"],
+            "final_edge_aug_bias_sigma_std": edge_aug_std_stats["std"],
             "final_edge_reg_mean": edge_reg_stats["mean"],
             "final_edge_reg_std": edge_reg_stats["std"],
+            "final_hier_edge_levels_active_ratio_mean": hier_levels_stats["mean"],
+            "final_hier_edge_levels_active_ratio_std": hier_levels_stats["std"],
+            "final_hier_edge_nonzero_ratio_mean": hier_nonzero_stats["mean"],
+            "final_hier_edge_nonzero_ratio_std": hier_nonzero_stats["std"],
+            "final_hier_edge_mean_abs_mean": hier_abs_stats["mean"],
+            "final_hier_edge_mean_abs_std": hier_abs_stats["std"],
+            "diag_factor_live_mean": diag_factor_live_stats["mean"],
+            "diag_dual_live_mean": diag_dual_live_stats["mean"],
+            "diag_msg_live_mean": diag_msg_live_stats["mean"],
+            "diag_assign_live_mean": diag_assign_live_stats["mean"],
+            "diag_hier_live_mean": diag_hier_live_stats["mean"],
+            "diag_aug_live_mean": diag_aug_live_stats["mean"],
+            "diag_dead_branch_count_mean": diag_dead_count_stats["mean"],
+            "diag_dead_branch_count_std": diag_dead_count_stats["std"],
+            "diag_all_required_live_mean": diag_all_live_stats["mean"],
+            "diag_all_required_live_std": diag_all_live_stats["std"],
             "selection_rule": "min_train_loss",
             "exp_iters": int(self.configs.exp_iters),
             "epochs": int(self.configs.epochs),
@@ -397,12 +561,19 @@ class Exp:
             if epoch == 1 or epoch == epochs or epoch % train_log_interval == 0:
                 edge_factor = adaptive_stats.get("edge_factor_mean", 1.0)
                 edge_reg = adaptive_stats.get("edge_reg", 0.0)
+                edge_factor_msg = adaptive_stats.get("edge_factor_msg_mean", edge_factor)
+                edge_factor_si = adaptive_stats.get("edge_factor_si_mean", edge_factor)
+                msg_gate = adaptive_stats.get("msg_gate_factor_mean", 1.0)
+                edge_aug_prior = adaptive_stats.get("edge_aug_bias_mean", 0.0)
+                hier_ratio = adaptive_stats.get("hier_edge_nonzero_ratio", 0.0)
                 logger.info(
                     f"[Stage2] Epoch {epoch}: loss={loss_value:.4f}, edge_fusion_gamma={curr_gamma:.4f}, "
                     f"graph_alpha={adaptive_stats['graph_alpha_mean']:.4f}, "
                     f"edge_rel={adaptive_stats['edge_reliability_mean']:.4f}, "
                     f"edge_mix={adaptive_stats.get('edge_mix_beta_mean', 0.0):.4f}, "
-                    f"edge_factor={edge_factor:.4f}, edge_reg={edge_reg:.6f}"
+                    f"edge_factor={edge_factor:.4f}, msg/si={edge_factor_msg:.4f}/{edge_factor_si:.4f}, "
+                    f"msg_gate={msg_gate:.4f}, edge_aug={edge_aug_prior:.4f}, "
+                    f"edge_reg={edge_reg:.6f}, hier_nonzero={hier_ratio:.4f}"
                 )
 
             if (epoch % eval_freq == 0) or (epoch == epochs):
@@ -441,8 +612,20 @@ class Exp:
             "edge_mix_beta_mean": 0.0,
             "edge_factor_mean": 1.0,
             "edge_factor_std": 0.0,
+            "edge_factor_msg_mean": 1.0,
+            "edge_factor_msg_std": 0.0,
+            "edge_factor_si_mean": 1.0,
+            "edge_factor_si_std": 0.0,
+            "msg_gate_factor_mean": 1.0,
+            "msg_gate_factor_std": 0.0,
+            "edge_aug_bias_mean": 0.0,
+            "edge_aug_bias_std": 0.0,
+            "hier_edge_levels_active_ratio": 0.0,
+            "hier_edge_nonzero_ratio": 0.0,
+            "hier_edge_mean_abs": 0.0,
             "edge_reg": 0.0,
         }
+        branch_diag = self._edge_branch_diagnostics(edge_stats)
 
         if np.isnan(final_eval["acc_mean"]):
             logger.info(
@@ -460,6 +643,17 @@ class Exp:
                 f"Conductance(mean/w): {struct['conductance_mean']:.6f}/{struct['conductance_weighted']:.6f}, "
                 f"Stability(pair-NMI): {final_eval['stability_pair_nmi']:.6f}"
             )
+        logger.info(
+            "[Diag] "
+            f"factor={branch_diag.get('diag_factor_live', float('nan'))}, "
+            f"dual={branch_diag.get('diag_dual_live', float('nan'))}, "
+            f"msg={branch_diag.get('diag_msg_live', float('nan'))}, "
+            f"assign={branch_diag.get('diag_assign_live', float('nan'))}, "
+            f"hier={branch_diag.get('diag_hier_live', float('nan'))}, "
+            f"aug={branch_diag.get('diag_aug_live', float('nan'))}, "
+            f"dead={branch_diag.get('diag_dead_branch_count', 0.0)}/"
+            f"{branch_diag.get('diag_required_branch_count', 0.0)}"
+        )
 
         return {
             "final_acc": float(final_eval["acc_mean"]),
@@ -481,5 +675,25 @@ class Exp:
             "final_edge_mix_beta": float(edge_stats.get("edge_mix_beta_mean", 0.0)),
             "final_edge_factor_mean": float(edge_stats.get("edge_factor_mean", 1.0)),
             "final_edge_factor_std": float(edge_stats.get("edge_factor_std", 0.0)),
+            "final_edge_factor_msg_mean": float(edge_stats.get("edge_factor_msg_mean", edge_stats.get("edge_factor_mean", 1.0))),
+            "final_edge_factor_msg_std": float(edge_stats.get("edge_factor_msg_std", edge_stats.get("edge_factor_std", 0.0))),
+            "final_edge_factor_si_mean": float(edge_stats.get("edge_factor_si_mean", edge_stats.get("edge_factor_mean", 1.0))),
+            "final_edge_factor_si_std": float(edge_stats.get("edge_factor_si_std", edge_stats.get("edge_factor_std", 0.0))),
+            "final_msg_gate_factor_mean": float(edge_stats.get("msg_gate_factor_mean", 1.0)),
+            "final_msg_gate_factor_std": float(edge_stats.get("msg_gate_factor_std", 0.0)),
+            "final_edge_aug_bias_mean": float(edge_stats.get("edge_aug_bias_mean", 0.0)),
+            "final_edge_aug_bias_std": float(edge_stats.get("edge_aug_bias_std", 0.0)),
+            "final_hier_edge_levels_active_ratio": float(edge_stats.get("hier_edge_levels_active_ratio", 0.0)),
+            "final_hier_edge_nonzero_ratio": float(edge_stats.get("hier_edge_nonzero_ratio", 0.0)),
+            "final_hier_edge_mean_abs": float(edge_stats.get("hier_edge_mean_abs", 0.0)),
             "final_edge_reg": float(edge_stats.get("edge_reg", 0.0)),
+            "diag_factor_live": float(branch_diag.get("diag_factor_live", float("nan"))),
+            "diag_dual_live": float(branch_diag.get("diag_dual_live", float("nan"))),
+            "diag_msg_live": float(branch_diag.get("diag_msg_live", float("nan"))),
+            "diag_assign_live": float(branch_diag.get("diag_assign_live", float("nan"))),
+            "diag_hier_live": float(branch_diag.get("diag_hier_live", float("nan"))),
+            "diag_aug_live": float(branch_diag.get("diag_aug_live", float("nan"))),
+            "diag_dead_branch_count": float(branch_diag.get("diag_dead_branch_count", 0.0)),
+            "diag_required_branch_count": float(branch_diag.get("diag_required_branch_count", 0.0)),
+            "diag_all_required_live": float(branch_diag.get("diag_all_required_live", 1.0)),
         }

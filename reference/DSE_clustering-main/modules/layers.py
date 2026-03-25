@@ -10,10 +10,10 @@ class LorentzGraphConvolution(nn.Module):
     Hyperbolic graph convolution layer.
     """
 
-    def __init__(self, manifold, in_dim, out_dim, use_bias, dropout, use_att, nonlin=None):
+    def __init__(self, manifold, in_dim, out_dim, use_bias, dropout, use_att, nonlin=None, att_mode="legacy"):
         super(LorentzGraphConvolution, self).__init__()
         self.linear = LorentzLinear(manifold, in_dim, out_dim, use_bias, dropout, nonlin=nonlin)
-        self.agg = LorentzAgg(manifold, out_dim, dropout, use_att)
+        self.agg = LorentzAgg(manifold, out_dim, dropout, use_att, att_mode=att_mode)
 
     def forward(self, x, adj):
         h = self.linear(x)
@@ -70,28 +70,41 @@ class LorentzAgg(nn.Module):
     Lorentz aggregation layer.
     """
 
-    def __init__(self, manifold, in_dim, dropout, use_att):
+    def __init__(self, manifold, in_dim, dropout, use_att, att_mode="legacy"):
         super(LorentzAgg, self).__init__()
         self.manifold = manifold
 
         self.in_features = in_dim
         self.dropout = dropout
         self.use_att = use_att
+        self.att_mode = att_mode
         if self.use_att:
             self.key_linear = LorentzLinear(manifold, in_dim, in_dim)
             self.query_linear = LorentzLinear(manifold, in_dim, in_dim)
-            self.bias = nn.Parameter(torch.zeros(()) + 20)
-            self.scale = nn.Parameter(torch.zeros(()) + math.sqrt(in_dim))
+            if self.att_mode == "paper":
+                self.att_proj = nn.Linear(2 * in_dim, 1, bias=False)
+                self.leaky_relu = nn.LeakyReLU(0.2)
+            else:
+                self.bias = nn.Parameter(torch.zeros(()) + 20)
+                self.scale = nn.Parameter(torch.zeros(()) + math.sqrt(in_dim))
 
     def forward(self, x, adj):
         if self.use_att:
             query = self.query_linear(x)
             key = self.key_linear(x)
-            att_adj = 2 + 2 * self.manifold.cinner(query, key)
-            att_adj = att_adj / self.scale + self.bias
-            att_adj = torch.sigmoid(att_adj)
-            att_adj = torch.mul(adj.to_dense(), att_adj)
-            support_t = torch.matmul(att_adj, x)
+            if self.att_mode == "paper":
+                edge_index = adj.coalesce().indices()
+                src, dst = edge_index[0], edge_index[1]
+                score = self.leaky_relu(self.att_proj(torch.cat([query[src], key[dst]], dim=-1))).squeeze(-1)
+                score = scatter_softmax(score, src, dim=0)
+                att_adj = torch.sparse_coo_tensor(edge_index, score, size=adj.shape).to(x.device)
+                support_t = torch.sparse.mm(att_adj, x)
+            else:
+                att_adj = 2 + 2 * self.manifold.cinner(query, key)
+                att_adj = att_adj / self.scale + self.bias
+                att_adj = torch.sigmoid(att_adj)
+                att_adj = torch.mul(adj.to_dense(), att_adj)
+                support_t = torch.matmul(att_adj, x)
         else:
             support_t = torch.matmul(adj, x)
 
@@ -103,7 +116,7 @@ class LorentzAgg(nn.Module):
 
 class LorentzAssignment(nn.Module):
     def __init__(self, manifold, in_dim, hid_dim, num_assign, dropout,
-                 bias=False, temperature=0.2):
+                 bias=False, temperature=0.2, att_mode="legacy", gumbel_assign=True):
         super(LorentzAssignment, self).__init__()
         self.manifold = manifold
         self.num_assign = num_assign
@@ -113,6 +126,11 @@ class LorentzAssignment(nn.Module):
         self.key_linear = LorentzLinear(manifold, in_dim, hid_dim, bias=False)
         self.query_linear = LorentzLinear(manifold, in_dim, hid_dim, bias=False)
         self.dropout = nn.Dropout(dropout)
+        self.att_mode = att_mode
+        self.gumbel_assign = gumbel_assign
+        if self.att_mode == "paper":
+            self.att_proj = nn.Linear(2 * hid_dim, 1, bias=False)
+            self.leaky_relu = nn.LeakyReLU(0.2)
 
     def forward(self, x, adj):
         ass = self.assign_linear(self.manifold.logmap0(x)).softmax(-1)
@@ -120,24 +138,32 @@ class LorentzAssignment(nn.Module):
         k = self.key_linear(x)
         edge_index = adj.coalesce().indices()
         src, dst = edge_index[0], edge_index[1]
-        score = self.manifold.dist(q[src], k[dst])
-        score = scatter_softmax(-score, src, dim=-1)
+        if self.att_mode == "paper":
+            score = self.leaky_relu(self.att_proj(torch.cat([q[src], k[dst]], dim=-1))).squeeze(-1)
+            score = scatter_softmax(score, src, dim=0)
+        else:
+            score = self.manifold.dist(q[src], k[dst])
+            score = scatter_softmax(-score, src, dim=0)
         att = torch.sparse_coo_tensor(edge_index, score, size=(x.shape[0], x.shape[0])).to(x.device)
-        ass = torch.matmul(att, ass)   # (N_k, N_{k-1})
-        ass = gumbel_softmax(torch.log(ass + 1e-6), temperature=self.temperature)
+        ass = torch.sparse.mm(att, ass)   # (N_k, N_{k-1})
+        if self.gumbel_assign:
+            ass = gumbel_softmax(torch.log(ass + 1e-6), temperature=self.temperature)
         return ass
 
 
 class LSENetLayer(nn.Module):
     def __init__(self, manifold, in_dim, hid_dim, num_assign, dropout,
-                 bias=False, use_att=False, nonlin=None, temperature=0.2):
+                 bias=False, use_att=False, nonlin=None, temperature=0.2,
+                 assign_att_mode="legacy", assign_gumbel=True):
         super(LSENetLayer, self).__init__()
         self.manifold = manifold
         # self.embeder = LorentzGraphConvolution(manifold, in_dim, hid_dim,
         #                                        True, dropout, use_att, nonlin)
         self.assigner = LorentzAssignment(manifold, hid_dim,
                                           hid_dim, num_assign,
-                                          dropout, bias, temperature)
+                                          dropout, bias, temperature,
+                                          att_mode=assign_att_mode,
+                                          gumbel_assign=assign_gumbel)
 
     def forward(self, x, adj):
         # x = self.embeder(x, adj)

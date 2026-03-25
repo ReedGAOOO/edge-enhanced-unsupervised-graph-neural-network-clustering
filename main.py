@@ -54,7 +54,7 @@ parser.add_argument('--knn_mode', type=str, default='auto', choices=['auto', 'de
 parser.add_argument('--knn_auto_threshold', type=int, default=20000,
                     help='When knn_mode=auto and num_nodes exceeds this threshold, switch to edge mode.')
 parser.add_argument("--epsInt", type=int, default=8)
-parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20'],
+parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20', 'V30', 'V31', 'V32', 'V33'],
                     help='V1: plain adjacency; V2: structural pre-weight; '
                          'V3: feature-similarity pre-weight; V4: hybrid pre-weight; '
                          'V5: hybrid + attention-stage edge fusion; '
@@ -62,7 +62,11 @@ parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2
                          'V8: calibrated mixture of structural/edge-attr fusion; '
                          'V12: V5 residual fusion with calibrated edge-attr correction; '
                          'V13: Lorentzized edge-attr residual fusion on assignment score; '
-                         'V20: SE-consistent learnable edge weighting with bounded regularization.')
+                         'V20: SE-consistent learnable edge weighting with bounded regularization; '
+                         'V30: dual message/SI edge scalarization; '
+                         'V31: V30 + assignment residual; '
+                         'V32: V31 + hierarchical edge-state pooling; '
+                         'V33: V32 + edge-aware augment prior.')
 parser.add_argument('--edge_hybrid_alpha', type=float, default=0.5,
                     help='Feature weight in hybrid edge variant V4/V5.')
 parser.add_argument('--edge_feat_temp', type=float, default=1.0,
@@ -109,6 +113,26 @@ parser.add_argument('--edge_weight_learn_temp', type=float, default=1.0,
                     help='V20: temperature on learned edge score before tanh clipping.')
 parser.add_argument('--edge_weight_learn_apply_to', type=str, default='both', choices=['si_only', 'both'],
                     help='V20: apply learned edge weighting to SI graph only, or both SI/message graphs.')
+parser.add_argument('--edge_attr_pool_topk', type=int, default=1,
+                    help='For hierarchical edge-state pooling: use top-k assignment parents per endpoint (1 = hard argmax).')
+parser.add_argument('--edge_msg_conditioned', action='store_true',
+                    help='Enable edge-conditioned message gating inside leaf Lorentz aggregation.')
+parser.add_argument('--edge_msg_gate_scale', type=float, default=0.35,
+                    help='Bounded log-scale for edge-conditioned message gating.')
+parser.add_argument('--edge_msg_matched_only', action='store_true',
+                    help='Apply message gating only on edges with aligned/original edge attributes.')
+parser.add_argument('--edge_msg_confidence_gate', action='store_true',
+                    help='Shrink message gating on low-confidence edge-gate scores.')
+parser.add_argument('--edge_msg_confidence_temp', type=float, default=1.0,
+                    help='Temperature for confidence-gated message conditioning.')
+parser.add_argument('--edge_attr_pool_confidence', action='store_true',
+                    help='Use assignment-confidence weighting during hierarchical edge-state pooling.')
+parser.add_argument('--edge_attr_pool_conf_power', type=float, default=1.0,
+                    help='Exponent applied to assignment-confidence weights in hierarchical edge-state pooling.')
+parser.add_argument('--edge_aug_prior_scale', type=float, default=0.0,
+                    help='For V33: additive scale of edge-attr prior on augment-graph candidate scores.')
+parser.add_argument('--edge_aug_prior_mode', type=str, default='raw', choices=['raw', 'positive', 'tanh'],
+                    help='For V33: transform mode for augment prior head before adding to candidate scores.')
 parser.add_argument('--known_only_eval', action='store_true',
                     help='For datasets with explicit unknown label mapping, remap unknown labels to -1 during evaluation.')
 parser.add_argument('--train_log_interval', type=int, default=1,

@@ -19,6 +19,7 @@ checkpoints/
 # Keep only README manifests in these dirs
 /data/*
 !/data/README.md
+/data/MetroFlow/
 /Exp/*
 !/Exp/README.md
 

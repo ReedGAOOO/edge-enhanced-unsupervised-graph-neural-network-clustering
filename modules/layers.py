@@ -10,14 +10,28 @@ class LorentzGraphConvolution(nn.Module):
     Hyperbolic graph convolution layer.
     """
 
-    def __init__(self, manifold, in_dim, out_dim, use_bias, dropout, use_att, nonlin=None):
+    def __init__(self, manifold, in_dim, out_dim, use_bias, dropout, use_att, nonlin=None,
+                 edge_conditioned=False, edge_attr_dim=1, edge_attr_hidden_dim=64, edge_gate_scale=0.35,
+                 edge_matched_only=False, edge_confidence_gate=False, edge_confidence_temp=1.0):
         super(LorentzGraphConvolution, self).__init__()
         self.linear = LorentzLinear(manifold, in_dim, out_dim, use_bias, dropout, nonlin=nonlin)
-        self.agg = LorentzAgg(manifold, out_dim, dropout, use_att)
+        self.agg = LorentzAgg(
+            manifold,
+            out_dim,
+            dropout,
+            use_att,
+            edge_conditioned=edge_conditioned,
+            edge_attr_dim=edge_attr_dim,
+            edge_attr_hidden_dim=edge_attr_hidden_dim,
+            edge_gate_scale=edge_gate_scale,
+            edge_matched_only=edge_matched_only,
+            edge_confidence_gate=edge_confidence_gate,
+            edge_confidence_temp=edge_confidence_temp,
+        )
 
-    def forward(self, x, adj):
+    def forward(self, x, adj, edge_attr=None, edge_mask=None, use_edge_attr=False):
         h = self.linear(x)
-        h = self.agg(h, adj)
+        h = self.agg(h, adj, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=use_edge_attr)
         return h
 
 
@@ -70,38 +84,110 @@ class LorentzAgg(nn.Module):
     Lorentz aggregation layer.
     """
 
-    def __init__(self, manifold, in_dim, dropout, use_att):
+    def __init__(self, manifold, in_dim, dropout, use_att,
+                 edge_conditioned=False, edge_attr_dim=1, edge_attr_hidden_dim=64, edge_gate_scale=0.35,
+                 edge_matched_only=False, edge_confidence_gate=False, edge_confidence_temp=1.0):
         super(LorentzAgg, self).__init__()
         self.manifold = manifold
 
         self.in_features = in_dim
         self.dropout = dropout
         self.use_att = use_att
+        self.edge_conditioned = bool(edge_conditioned)
+        self.edge_gate_scale = float(edge_gate_scale)
+        self.edge_matched_only = bool(edge_matched_only)
+        self.edge_confidence_gate = bool(edge_confidence_gate)
+        self.edge_confidence_temp = float(max(1e-3, edge_confidence_temp))
+        self.last_msg_gate_factor_mean = 1.0
+        self.last_msg_gate_factor_std = 0.0
         if self.use_att:
             self.key_linear = LorentzLinear(manifold, in_dim, in_dim)
             self.query_linear = LorentzLinear(manifold, in_dim, in_dim)
             self.bias = nn.Parameter(torch.zeros(()) + 20)
             self.scale = nn.Parameter(torch.zeros(()) + math.sqrt(in_dim))
+        if self.edge_conditioned:
+            hidden = max(8, int(edge_attr_hidden_dim))
+            self.edge_gate_mlp = nn.Sequential(
+                nn.Linear(int(max(1, edge_attr_dim)), hidden),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden, 1),
+            )
 
-    def forward(self, x, adj):
+    @staticmethod
+    def _normalize_sparse_by_degree(adj_k):
+        coo = adj_k.coalesce()
+        idx = coo.indices()
+        val = coo.values()
+        row = idx[0].long()
+        col = idx[1].long()
+        num_nodes = int(coo.size(0))
+        deg = torch.zeros(num_nodes, dtype=val.dtype, device=val.device)
+        deg.index_add_(0, row, val)
+        deg_inv_sqrt = deg.clamp_min(1e-12).pow(-0.5)
+        norm_val = deg_inv_sqrt[row] * val * deg_inv_sqrt[col]
+        return torch.sparse_coo_tensor(idx, norm_val, size=coo.size(), device=coo.device).coalesce()
+
+    def _apply_edge_gate_to_adj(self, adj, edge_attr, edge_mask, use_edge_attr: bool):
+        self.last_msg_gate_factor_mean = 1.0
+        self.last_msg_gate_factor_std = 0.0
+        if (not self.edge_conditioned) or (not bool(use_edge_attr)) or edge_attr is None:
+            return adj
+
+        adj_sp = adj.coalesce() if adj.is_sparse else adj.to_sparse().coalesce()
+        if edge_attr.dim() == 1:
+            edge_attr = edge_attr.unsqueeze(1)
+        if edge_attr.shape[0] != adj_sp.indices().shape[1]:
+            return adj
+
+        gate_raw = self.edge_gate_mlp(edge_attr.to(dtype=adj_sp.values().dtype, device=adj_sp.values().device)).squeeze(-1)
+        gate_raw = gate_raw - gate_raw.mean()
+        gate_raw = gate_raw / gate_raw.std(unbiased=False).clamp_min(1e-6)
+        if self.edge_confidence_gate:
+            conf = torch.sigmoid((gate_raw.abs() - 1.0) / self.edge_confidence_temp)
+            gate_raw = conf * gate_raw
+        gate_raw = torch.tanh(gate_raw) * float(self.edge_gate_scale)
+        factor = torch.exp(gate_raw)
+        eff_mask = None
+        if edge_mask is not None:
+            eff_mask = edge_mask.to(dtype=torch.bool, device=factor.device)
+        if self.edge_matched_only and eff_mask is not None:
+            factor = torch.where(eff_mask, factor, torch.ones_like(factor))
+        gated = torch.sparse_coo_tensor(
+            adj_sp.indices(),
+            adj_sp.values() * factor.to(dtype=adj_sp.values().dtype, device=adj_sp.values().device),
+            size=adj_sp.size(),
+            device=adj_sp.device,
+        ).coalesce()
+        gated = self._normalize_sparse_by_degree(gated)
+        if eff_mask is not None and torch.any(eff_mask):
+            stat_factor = factor[eff_mask]
+        else:
+            stat_factor = factor
+        self.last_msg_gate_factor_mean = float(stat_factor.detach().mean().item())
+        self.last_msg_gate_factor_std = float(stat_factor.detach().std(unbiased=False).item())
+        return gated
+
+    def forward(self, x, adj, edge_attr=None, edge_mask=None, use_edge_attr=False):
+        adj_eff = self._apply_edge_gate_to_adj(adj, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=use_edge_attr)
         if self.use_att:
             query = self.query_linear(x)
             key = self.key_linear(x)
             att_adj = 2 + 2 * self.manifold.cinner(query, key)
             att_adj = att_adj / self.scale + self.bias
             att_adj = torch.sigmoid(att_adj)
-            att_adj = torch.mul(adj.to_dense(), att_adj)
+            att_adj = torch.mul(adj_eff.to_dense(), att_adj)
             support_t = torch.matmul(att_adj, x)
         else:
             # CUDA sparse addmm currently does not support bfloat16.
             # Keep sparse aggregation in fp32 and cast back to preserve AMP flow.
-            if adj.is_sparse and torch.is_autocast_enabled():
+            if adj_eff.is_sparse and torch.is_autocast_enabled():
                 out_dtype = x.dtype
                 with torch.autocast(device_type="cuda", enabled=False):
-                    support_t = torch.matmul(adj.float(), x.float())
+                    support_t = torch.matmul(adj_eff.float(), x.float())
                 support_t = support_t.to(dtype=out_dtype)
             else:
-                support_t = torch.matmul(adj, x)
+                support_t = torch.matmul(adj_eff, x)
 
         denorm = (-self.manifold.inner(None, support_t, keepdim=True))
         denorm = denorm.abs().clamp_min(1e-8).sqrt()
@@ -202,7 +288,7 @@ class LorentzAssignment(nn.Module):
             self.last_reliability_mean = float(reliability.detach().mean().cpu().item())
             self.last_mix_beta = 0.0
             score = score + float(self.edge_fusion_gamma) * graph_alpha * reliability * edge_log
-        elif self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13'} and bool(use_edge_attr) and edge_attr is not None:
+        elif self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13', 'V31', 'V32', 'V33'} and bool(use_edge_attr) and edge_attr is not None:
             if edge_attr.dim() == 1:
                 edge_attr = edge_attr.unsqueeze(1)
             if edge_attr.shape[0] == edge_value.shape[0]:
@@ -259,7 +345,7 @@ class LorentzAssignment(nn.Module):
                     struct_term = struct_rel * torch.tanh(edge_log)
                     attr_term_raw = attr_rel * torch.tanh(attr_bias)
                     attr_term = (1.0 - mix_beta) * struct_term + mix_beta * attr_term_raw
-                elif self.edge_variant == 'V12':
+                elif self.edge_variant in {'V12', 'V31', 'V32', 'V33'}:
                     # V12: keep V5 as stable trunk and add calibrated edge-attribute residual.
                     struct_rel, _ = self._struct_reliability_and_log(edge_value)
                     attr_rel = attr_gate

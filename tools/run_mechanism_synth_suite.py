@@ -17,7 +17,14 @@ import pandas as pd
 PRESET_MAP = {
     "baseline_v1": "configs/presets/baseline_v1.json",
     "g15_echf_main": "configs/presets/g15_echf_main.json",
+    "g13_edge_lorentz_l1": "configs/presets/g13_edge_lorentz_l1.json",
+    "g13_edge_lorentz_l2": "configs/presets/g13_edge_lorentz_l2.json",
+    "g13_edge_lorentz_noadapt": "configs/presets/g13_edge_lorentz_noadapt.json",
     "g20_se_consistent_main": "configs/presets/g20_se_consistent_main.json",
+    "b30_dualscalar": "configs/presets/b30_dualscalar.json",
+    "b31_dualscalar_assign": "configs/presets/b31_dualscalar_assign.json",
+    "b32_dualscalar_assign_hier": "configs/presets/b32_dualscalar_assign_hier.json",
+    "b33_dualscalar_assign_hier_aug": "configs/presets/b33_dualscalar_assign_hier_aug.json",
 }
 
 
@@ -142,6 +149,8 @@ def build_cmd(
         str(preset.get("edge_attr_hidden_dim", 64)),
         "--edge_attr_fusion_scale",
         str(preset.get("edge_attr_fusion_scale", 1.0)),
+        "--edge_attr_pool_topk",
+        str(preset.get("edge_attr_pool_topk", 1)),
         "--edge_attr_weight_blend",
         str(preset.get("edge_attr_weight_blend", 0.0)),
         "--edge_attr_weight_temp",
@@ -156,6 +165,8 @@ def build_cmd(
         str(preset.get("edge_weight_learn_temp", 1.0)),
         "--edge_weight_learn_apply_to",
         str(preset.get("edge_weight_learn_apply_to", "both")),
+        "--edge_aug_prior_scale",
+        str(preset.get("edge_aug_prior_scale", 0.0)),
     ]
     if bool(preset.get("edge_adaptive_alpha", False)):
         cmd.append("--edge_adaptive_alpha")

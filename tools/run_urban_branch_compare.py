@@ -36,6 +36,7 @@ CONDITION_ALIASES = {
     "G15_default_hetero": "G15_ECHF_main",
     "G15_noadapt_hetero": "G15_ECHF_noadapt",
     "G17_temp1p5_mainline": "G17_V5_temp15",
+    "g20_se_consistent_main": "G20_SE_main",
 }
 
 
@@ -431,6 +432,33 @@ def condition_space() -> List[Dict[str, object]]:
             "edge_attr_weight_apply_to": "si_only",
             "edge_attr_hierarchical": True,
         },
+        {
+            # Preset-aligned G20 mainline.
+            "condition": "G20_SE_main",
+            "edge_variant": "V20",
+            "edge_hybrid_alpha": 0.7,
+            "edge_feat_temp": 1.0,
+            "edge_input_prior_alpha": 0.35,
+            "edge_fusion_gamma": 1.0,
+            "edge_fusion_gamma_start": 0.2,
+            "edge_fusion_gamma_end": 1.2,
+            "edge_fusion_gamma_sched_epochs": 100,
+            "edge_adaptive_alpha": False,
+            "edge_adaptive_alpha_strength": 2.0,
+            "edge_adaptive_alpha_bias": 0.0,
+            "edge_reliability_temp": 1.0,
+            "edge_confidence_quantile": 0.0,
+            "edge_attr_hidden_dim": 64,
+            "edge_attr_fusion_scale": 0.7,
+            "edge_attr_weight_blend": 0.0,
+            "edge_attr_weight_temp": 1.0,
+            "edge_attr_weight_apply_to": "si_only",
+            "edge_attr_hierarchical": False,
+            "edge_weight_learn_reg_lambda": 0.02,
+            "edge_weight_learn_logclip": 0.8,
+            "edge_weight_learn_temp": 1.0,
+            "edge_weight_learn_apply_to": "both",
+        },
     ]
 
 
@@ -498,6 +526,14 @@ def build_cmd(repo: Path, dataset: str, seed: int, version: str, cond: Dict[str,
         str(cond.get("edge_attr_weight_temp", args.edge_attr_weight_temp)),
         "--edge_attr_weight_apply_to",
         str(cond.get("edge_attr_weight_apply_to", args.edge_attr_weight_apply_to)),
+        "--edge_weight_learn_reg_lambda",
+        str(cond.get("edge_weight_learn_reg_lambda", 0.02)),
+        "--edge_weight_learn_logclip",
+        str(cond.get("edge_weight_learn_logclip", 0.8)),
+        "--edge_weight_learn_temp",
+        str(cond.get("edge_weight_learn_temp", 1.0)),
+        "--edge_weight_learn_apply_to",
+        str(cond.get("edge_weight_learn_apply_to", "both")),
         "--patience",
         str(args.patience),
     ]

@@ -41,6 +41,19 @@ parser.add_argument('--n_cluster_trials', type=int, default=3)
 parser.add_argument('--alpha', type=float, default=0.01)
 parser.add_argument('--knn', type=int, default=8)
 parser.add_argument("--epsInt", type=int, default=8)
+parser.add_argument('--optimizer', type=str, default='adamw',
+                    choices=['adam', 'adamw', 'riemannianadam'])
+parser.add_argument('--paper_faithful', action='store_true')
+parser.add_argument('--leaf_use_att', action='store_true')
+parser.add_argument('--leaf_att_mode', type=str, default='legacy',
+                    choices=['legacy', 'paper'])
+parser.add_argument('--num_input_lconvs', type=int, default=2)
+parser.add_argument('--assign_att_mode', type=str, default='legacy',
+                    choices=['legacy', 'paper'])
+parser.add_argument('--assign_gumbel', dest='assign_gumbel', action='store_true')
+parser.add_argument('--no_assign_gumbel', dest='assign_gumbel', action='store_false')
+parser.set_defaults(assign_gumbel=True)
+parser.add_argument('--paper_graph_fusion', action='store_true')
 
 parser.add_argument('--patience', type=int, default=5, help='early stopping patience')
 parser.add_argument('--save_path', type=str, default='model.pt')
@@ -53,6 +66,20 @@ parser.add_argument('--devices', type=str, default='0,1',
 
 
 configs = parser.parse_args()
+if configs.paper_faithful:
+    configs.optimizer = 'adam'
+    configs.lr = 0.003
+    configs.hid_dim = 2
+    configs.max_nums = [10]
+    configs.knn = 8
+    configs.alpha = 0.01
+    configs.leaf_use_att = True
+    configs.leaf_att_mode = 'paper'
+    configs.num_input_lconvs = 1
+    configs.assign_att_mode = 'paper'
+    configs.assign_gumbel = False
+    configs.paper_graph_fusion = True
+
 # with open(f'./configs/{configs.dataset}.json', 'wt') as f:
 #     json.dump(vars(configs), f, indent=4)
 
@@ -64,14 +91,10 @@ configs = parser.parse_args()
 
 log_path = f"./results/{configs.version}/{configs.dataset}.log"
 configs.log_path = log_path
-if not os.path.exists('./checkpoints'):
-    os.mkdir('./checkpoints')
-if not os.path.exists(f"./results"):
-    os.mkdir("./results")
-if not os.path.exists(f"./results/{configs.dataset}"):
-    os.mkdir(f"./results/{configs.dataset}")
-if not os.path.exists(f"./results/{configs.version}"):
-    os.mkdir(f"./results/{configs.version}")
+os.makedirs('./checkpoints', exist_ok=True)
+os.makedirs("./results", exist_ok=True)
+os.makedirs(f"./results/{configs.dataset}", exist_ok=True)
+os.makedirs(f"./results/{configs.version}", exist_ok=True)
 print(f"Log path: {configs.log_path}")
 logger = create_logger(configs.log_path)
 logger.info(configs)

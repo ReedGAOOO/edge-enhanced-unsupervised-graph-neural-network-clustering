@@ -34,7 +34,25 @@ PRESET_MAP = {
     "g15_echf_noadapt": "configs/presets/g15_echf_noadapt.json",
     "g17_v5_temp15": "configs/presets/g17_v5_temp15.json",
     "g13_edge_lorentz_l1": "configs/presets/g13_edge_lorentz_l1.json",
+    "g13_edge_lorentz_l2": "configs/presets/g13_edge_lorentz_l2.json",
+    "g13_edge_lorentz_noadapt": "configs/presets/g13_edge_lorentz_noadapt.json",
     "g20_se_consistent_main": "configs/presets/g20_se_consistent_main.json",
+    "b40_v31_msgcond": "configs/presets/b40_v31_msgcond.json",
+    "b43_v31_msgcond_matchonly": "configs/presets/b43_v31_msgcond_matchonly.json",
+    "b44_v31_msgcond_gs020": "configs/presets/b44_v31_msgcond_gs020.json",
+    "b45_v31_msgcond_gs050": "configs/presets/b45_v31_msgcond_gs050.json",
+    "b46_v31_msgcond_confgate": "configs/presets/b46_v31_msgcond_confgate.json",
+    "b47_v31_msgcond_gs050_matchonly": "configs/presets/b47_v31_msgcond_gs050_matchonly.json",
+    "b48_v31_msgcond_gs050_confgate": "configs/presets/b48_v31_msgcond_gs050_confgate.json",
+    "b30_dualscalar": "configs/presets/b30_dualscalar.json",
+    "b31_dualscalar_assign": "configs/presets/b31_dualscalar_assign.json",
+    "b32_dualscalar_assign_hier": "configs/presets/b32_dualscalar_assign_hier.json",
+    "b33_dualscalar_assign_hier_aug": "configs/presets/b33_dualscalar_assign_hier_aug.json",
+    "b34_v33_augsmall": "configs/presets/b34_v33_augsmall.json",
+    "b35_v33_augpositive": "configs/presets/b35_v33_augpositive.json",
+    "b36_v33_augpositive_small": "configs/presets/b36_v33_augpositive_small.json",
+    "b37_v32_hardhier": "configs/presets/b37_v32_hardhier.json",
+    "b38_v32_topk3": "configs/presets/b38_v32_topk3.json",
     # Backward-compatible aliases.
     "b15_pathb_v12_hier": "configs/presets/b15_pathb_v12_hier.json",
     "g17_temp1p5_mainline": "configs/presets/g17_temp1p5_mainline.json",
@@ -59,7 +77,7 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
 
     parser = argparse.ArgumentParser(description="Run edge-fusion preset")
-    parser.add_argument("--preset", type=str, default="g20_se_consistent_main")
+    parser.add_argument("--preset", type=str, default="b45_v31_msgcond_gs050")
     parser.add_argument("--dataset", type=str, default="cora")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--gpu", type=int, default=0)
@@ -119,6 +137,8 @@ def main() -> None:
         str(args.seed),
         "--version",
         version,
+        "--save_path",
+        f"{version}.pt",
         "--gpu",
         str(args.gpu),
         "--edge_variant",
@@ -145,6 +165,12 @@ def main() -> None:
         str(preset.get("edge_attr_hidden_dim", 64)),
         "--edge_attr_fusion_scale",
         str(preset.get("edge_attr_fusion_scale", 1.0)),
+        "--edge_attr_pool_topk",
+        str(preset.get("edge_attr_pool_topk", 1)),
+        "--edge_msg_gate_scale",
+        str(preset.get("edge_msg_gate_scale", 0.35)),
+        "--edge_msg_confidence_temp",
+        str(preset.get("edge_msg_confidence_temp", 1.0)),
         "--edge_attr_weight_blend",
         str(preset.get("edge_attr_weight_blend", 0.0)),
         "--edge_attr_weight_temp",
@@ -159,6 +185,10 @@ def main() -> None:
         str(preset.get("edge_weight_learn_temp", 1.0)),
         "--edge_weight_learn_apply_to",
         str(preset.get("edge_weight_learn_apply_to", "both")),
+        "--edge_aug_prior_scale",
+        str(preset.get("edge_aug_prior_scale", 0.0)),
+        "--edge_aug_prior_mode",
+        str(preset.get("edge_aug_prior_mode", "raw")),
     ]
 
     if preset.get("edge_fusion_gamma_start", None) is not None:
@@ -169,6 +199,14 @@ def main() -> None:
         cmd.append("--edge_adaptive_alpha")
     if bool(preset.get("edge_attr_hierarchical", False)):
         cmd.append("--edge_attr_hierarchical")
+    if bool(preset.get("edge_msg_conditioned", False)):
+        cmd.append("--edge_msg_conditioned")
+    if bool(preset.get("edge_msg_matched_only", False)):
+        cmd.append("--edge_msg_matched_only")
+    if bool(preset.get("edge_msg_confidence_gate", False)):
+        cmd.append("--edge_msg_confidence_gate")
+    if bool(preset.get("edge_attr_pool_confidence", False)):
+        cmd.append("--edge_attr_pool_confidence")
     if bool(preset.get("append_generic_edge_attr", False)):
         cmd.append("--append_generic_edge_attr")
 

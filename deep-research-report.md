@@ -252,6 +252,771 @@ LSEnet/ASIL/DeSE 路线的关键卖点之一是“无需预设 K 或弱化对 K 
 > (1) 小/中图：dense 往往更快，edge 主要贡献在精度或结构指标；  
 > (2) 大图：dense 进入 OOM 区间，edge/auto 提供可训练路径（这是系统价值主轴）。
 
+### B30 系列新一代 edge-aware 路线与控制实验进展（已回答，2026-03-25）
+
+在完成 ECHF/G15 主线整理后，仓库进一步从“**现有代码主干本身**”出发，而非继续沿论文叙事反推，提出了 `B30` 系列作为下一代 edge-aware 路线。其出发点是：当前系统真正决定聚类树生成的主干是 `encoder -> ass_dict -> adj_dict -> se_loss`，因此边信息若要成为有效信号，就必须进入 **assignment、层级上传、结构图权重** 这三条主路径，而不能只在叶层局部做 edge MLP。
+
+#### B30 系列的结构分解
+
+- `B30 / V30`：新增双标量边头，把 `edge_attr` 同时映射到 `msg` 图与 `si` 图的结构权重（dual-scalar route）。  
+- `B31 / V31`：在 `B30` 基础上，把边属性进一步注入 assignment-score，测试“边是否应该先影响谁并到谁”。  
+- `B32 / V32`：在 `B31` 基础上加入层级 edge-state 上传，测试边语义是否应跨层传播。  
+- `B33 / V33`：在 `B32` 基础上再把边先验送入 augment graph，测试“边先验是否也应影响 KNN augmentation”。
+
+这一路线并未重写 `_si_loss()` 本体，而是保持结构熵损失仍然只吃标量邻接，把多维边语义限制在“**树生成机制**”而非“**结构熵公式本体**”上。这是出于工程可控性考虑：先验证 edge-aware 是否真的改变了树，再决定是否需要改目标函数。
+
+#### P0：运行期诊断先验证“模块是否活着”
+
+在继续大规模实验前，已补充分支健康诊断，新增以下 runtime 指标：
+
+- `diag_factor_live`
+- `diag_dual_live`
+- `diag_assign_live`
+- `diag_hier_live`
+- `diag_aug_live`
+- `diag_dead_branch_count`
+
+并同时记录：
+
+- `hier_edge_levels_active_ratio`
+- `hier_edge_nonzero_ratio`
+- `hier_edge_mean_abs`
+- `edge_aug_bias_mean`
+- `edge_aug_bias_std`
+
+结果文件：
+
+- `results/diagnostic_b30_components_smoke_v2/branch_health_summary.csv`
+- `results/diagnostic_b30_components_smoke_v2/stage_delta_summary.csv`
+
+结论：
+
+- `B20` 的结构边权学习是活的。  
+- `B30` 的 dual `msg/si` scalar 头是活的，且两头数值已分化，不是同一条死支路。  
+- `B31` 的 assignment fusion 是活的。  
+- `B32/B33` 的 hierarchical edge pooling 通路是活的，并且确实向父层上传了非零 edge state。  
+- `B33` 的 augment prior 也不是死分支；问题不是“没接通”，而是“接通了但当前有害”。
+
+这一步非常关键，因为它排除了“代码接线错误导致的假消融”。
+
+#### P1/P2：第一轮控制实验筛选（3 类机制数据）
+
+本轮不是直接上公开 benchmark，而是先在 3 个代表性控制数据上做机制筛选：
+
+- `synth_edgectrl_v1_mredu_h65_s90_ds00`：冗余 edge_attr（边信息主要重复节点/拓扑信息）  
+- `synth_edgectrl_v1_mmisl_h65_s90_ds00`：误导 edge_attr（边信息与最终 fine label 错位）  
+- `synth_edgectrl_v1_mhier_h65_s90_ds00`：层级 edge_attr（边信息更偏 coarse/hierarchical semantics）
+
+结果文件：
+
+- `results/diagnostic_b30_round1_screen_v1/summary_by_condition.csv`
+- `results/diagnostic_b30_round1_screen_v1/summary_by_condition_dataset.csv`
+- `results/diagnostic_b30_round1_screen_v1/stage_delta_summary.csv`
+- `results/diagnostic_b30_round1_screen_v1/stage_delta_by_dataset.csv`
+- `results/diagnostic_b30_round1_screen_v1/branch_health_summary.csv`
+
+本轮配置：
+
+- `seed=0`
+- `epochs=20`
+- 版本：`baseline_v1`, `g20_se_consistent_main`, `B30`, `B31`, `B32`, `B33`，以及 5 个修正版本 `B34/B35/B36/B37/B38`
+
+#### 第一轮保留的 3 个版本
+
+| 版本 | 保留理由 | 当前结论 |
+|---|---|---|
+| `B32` | hierarchy 打开后在 3 个控制机制上没有负增益，且整体分数最高一档 | 当前 hierarchy 主候选 |
+| `B37` | 与 `B32` 打平，但更简单（hard hierarchy），且 SI loss 略低 | `B32` 的简化等价替代 |
+| `B36` | 是 `B33` augment 修复线里唯一稳定回升的版本 | augment 线唯一值得继续保留的候选 |
+
+#### 为什么保留 `B32`
+
+`B32` 相比 `B31` 只多一个模块：**hierarchical edge-state pooling**。  
+如果这条线真的有价值，那么最基本的要求是：它至少不应在多种 edge semantics 下引入稳定负增益。
+
+而结果正是如此：
+
+- `mhier`：`B31 -> B32` 的 `ΔNMI = 0`
+- `mmisl`：`ΔNMI = 0`
+- `mredu`：`ΔNMI = +2.14e-5`
+
+也就是说，`hier_on` 在 3 个控制机制上都是**非负**的。结合 `diag_hier_live_mean = 1.0` 与 `diag_dead_branch_count_mean = 0`，可以判断：
+
+> `B32` 的 hierarchy 分支不是“无效接线”，而是“当前已经接通，且至少稳健不伤害”的可保留主线。
+
+#### 为什么保留 `B37`
+
+`B37` 的改动很小，只是把 `B32` 的 soft top-k hierarchy 改为更硬的 `topk=1` pooling。  
+这条分支保留的逻辑不是“它更强”，而是：
+
+- 在 3 个控制数据上，`B37` 与 `B32` 的 `NMI/ARI` 完全打平；  
+- 但 `SI loss` 在 3 个控制数据上都略低一些。
+
+这说明当前 `B32` 的 soft hierarchy 还没有打出比 hard hierarchy 更强的增益。于是：
+
+> `B37` 应作为 `B32` 的低复杂度对照保留，用于下一阶段确认“当前是否真的需要更复杂的层级 pooling”。
+
+#### 为什么保留 `B36`
+
+`B33` 的主要问题已经由控制实验确认：  
+`B32 -> B33` 这一跳会在 3 个控制数据上全部掉点，平均 `ΔNMI = -0.002302`。  
+因此第一轮的重点不是“继续加 augment”，而是判断 augment 线是否**可救**。
+
+`B36` 的设计是：
+
+- `positive-only augment prior`
+- `small-scale augment prior`
+
+其理论含义是：把 augment 从“强 signed perturbation”改为“弱正向支持项”。  
+结果也支持这一点：
+
+- 在 `mredu` 上，`B36 > B33`
+- 在 `mmisl` 上，`B36 > B33`
+- 在 `mhier` 上，`B36 = B33`
+
+因此：
+
+> `B36` 证明了 augment 线的问题更像是“注入方式不对/强度过大”，而不是“augment 这个想法完全错误”。  
+> 它还不是当前最优版本，但足以进入下一阶段确认。
+
+#### 当前证据的边界
+
+需要明确指出：上述结论目前仍然是**“控制实验上的初筛结论”**，还不是“最终主线定版”。
+
+当前证据覆盖：
+
+- 3 类代表性控制机制
+- `seed=0`
+- `epochs=20`
+
+尚未覆盖：
+
+- 多 seed 稳定性
+- 更长训练轮次
+- 更完整的 `homophily / signal / noise` 网格
+
+因此更准确的表述是：
+
+> `B32/B37/B36` 是当前值得推进到下一阶段的 **promoted candidates**，  
+> 不是已经完成全变量验证的最终主线。
+
+#### 下一阶段实验顺序
+
+下一步已确定为“中程确认轮”，而非立即扩展到公开 benchmark：
+
+- 数据：仍用 `mredu/mmisl/mhier`
+- seeds：`0,1,2`
+- epochs：`60`
+- 对照版本：`baseline_v1`, `g20_se_consistent_main`, `B31`, `B32`, `B36`, `B37`
+
+判据：
+
+1. 若 `B36` 仍明显落后于 `B32/B37`，则冻结 augment 线。  
+2. 若 `B37` 持续打平 `B32`，则后续优先保留 `B37`。  
+3. 只有在 `B36` 逼近或超过 `B32/B37` 时，才继续推进 augment + hierarchy 的组合线。
+
+#### 中程确认结果（已完成，2026-03-25）
+
+上述确认轮已经完成，结果目录：
+
+- `results/diagnostic_b30_round2_confirm60_v2/summary_by_condition.csv`
+- `results/diagnostic_b30_round2_confirm60_v2/summary_by_condition_dataset.csv`
+- `results/diagnostic_b30_round2_confirm60_v2/stage_delta_summary.csv`
+- `results/diagnostic_b30_round2_confirm60_v2/stage_delta_by_dataset.csv`
+- `results/diagnostic_b30_round2_confirm60_v2/branch_health_summary.csv`
+
+配置：
+
+- 数据：`mredu/mmisl/mhier`
+- seeds：`0,1,2`
+- epochs：`60`
+- 对照：`baseline_v1`, `g20_se_consistent_main`, `B31`, `B32`, `B36`, `B37`
+
+总体排序（按 `NMI mean`）：
+
+1. `G20`：`0.02922`
+2. `B31`：`0.01635`
+3. `B32`：`0.01553`
+4. `B37`：`0.01547`
+5. `B36`：`0.01450`
+6. `baseline`：`0.00675`
+
+这轮有两个关键修正：
+
+**其一，`B31` 成为当前 `B30` 家族里最稳的版本。**  
+首轮 `20 epoch / seed=0` 的结果里，`B32/B37` 看起来略优；但在 `60 epoch × 3 seeds` 后，`B31` 反而整体最好。说明先前的 hierarchy 优势并不稳固，更像是短程训练下的弱正偏差。
+
+**其二，`hier_on: B31 -> B32` 在中程确认中转为总体负增益。**  
+`stage_delta_summary.csv` 给出：
+
+- `hier_on` 平均 `ΔNMI = -0.000821`
+- 平均 `ΔARI = -0.000529`
+
+逐数据集看：
+
+- `mhier`：`+1.54e-5`（极小正增益）
+- `mmisl`：`-0.001022`
+- `mredu`：`-0.001458`
+
+这意味着：
+
+> hierarchy 分支仍然是活的，但它只在“确实具有层级 edge semantics”的控制数据上保持近乎中性/极小正增益；  
+> 一旦 edge signal 是冗余或误导性的，层级上传会把这类边语义进一步扩散到更高层，反而伤害结果。
+
+因此，`B32/B37` 不应再作为当前主推主线，只能作为“**层级 edge semantics 专项验证分支**”保留。
+
+#### 对 `B36` 的最终判断
+
+`B36` 在中程确认轮里仍然优于 baseline，但没有超过 `B31`，也没有成为稳定优于 hierarchy 线的版本：
+
+- 总体 `NMI`：`B36 = 0.01450 < B31 = 0.01635`
+- 在 `mredu` 上，`B36` 略高于 `B32/B37`
+- 但在 `mmisl/mhier` 上都落后于 `B31/B32/B37`
+
+因此更准确的结论是：
+
+> `B36` 证明 augment 线仍可被“保守化”后继续研究，但它不足以进入当前主线；  
+> 在下一阶段应将 augment 线降级为探索分支，而不是继续与主线并行扩展。
+
+#### B30 系列当前阶段性结论
+
+综合首轮筛选与中程确认：
+
+- `B31`：当前 `B30` 家族的**最佳保留版本**  
+- `B32/B37`：从“主候选”降级为“层级语义专项分支”  
+- `B36`：从“augment 修复候选”降级为“保守 augment 探索分支”
+
+与 `G20` 对比也很重要：在这 3 类控制数据和本轮设置下，`G20` 明显强于所有 `B30` 版本。  
+这说明“**SE-consistent scalar route**”目前仍然是更稳的 edge-aware 主线，而 `B30` 家族的价值更多在于：
+
+1. 验证哪些 edge-aware 结构是**真的活着**；  
+2. 验证 assignment / hierarchy / augment 三条路径各自的边界条件；  
+3. 为下一阶段更强的 edge-conditioned message passing 或更精细的层级聚合提供归因基础。
+
+#### 扩展控制网格结果（已完成，2026-03-25）
+
+为了避免把结论建立在单一控制点上，随后又把 edge-control 控制数据从 3 个扩展到 9 个：
+
+- 模式：`mredu / mmisl / mhier`
+- 同配性：`h45 / h65 / h85`
+- 固定：`signal=0.90`
+- seeds：`0,1,2`
+- epochs：`60`
+
+结果目录：
+
+- `results/diagnostic_b30_round3_edgectrl9_v1/summary_by_condition.csv`
+- `results/diagnostic_b30_round3_edgectrl9_v1/summary_by_condition_dataset.csv`
+- `results/diagnostic_b30_round3_edgectrl9_v1/stage_delta_summary.csv`
+- `results/diagnostic_b30_round3_edgectrl9_v1/stage_delta_by_dataset.csv`
+
+总体上，`NMI` 排名为：
+
+1. `B36`: `0.11473`
+2. `G20`: `0.11412`
+3. `B32`: `0.10699`
+4. `B37`: `0.10688`
+5. `B31`: `0.10591`
+6. `baseline`: `0.07422`
+
+但若看 `ARI`，则 `G20` 最高（`0.10542`），`B36` 仅为 `0.09213`。  
+这说明：
+
+> `B36` 与 `G20` 的优劣已经不是“单一主线 vs 失败备份”的关系，  
+> 而是开始呈现**不同 edge-control 机制下的互补适用区间**。
+
+##### 按控制模式拆解
+
+- **`mhier` 模式**：`B36` 最好（`NMI≈0.11364`），略高于 `G20`
+- **`mredu` 模式**：`B36` 最好（`NMI≈0.11499`），高于 `G20`
+- **`mmisl` 模式**：`G20` 最好（`NMI≈0.12143`），明显高于 `B36`
+
+这说明：
+
+- 当 edge semantics 更偏层级/冗余但仍有稳定信息时，`B36` 的“保守 augment”更能放大有用边先验；  
+- 当 edge semantics 明显带有错位/误导性时，`G20` 的 **SE-consistent scalar route** 仍然更稳。
+
+##### 按同配性拆解
+
+- **`h45`**：`G20` 最好，`B36` 最弱  
+- **`h65`**：`G20` 仍最好，`B32/B36/B31/B37` 接近但明显落后  
+- **`h85`**：`B36` 最好（`NMI≈0.32286`），超过 `G20`
+
+这说明：
+
+> `B36` 的优势主要出现在**高同配 + 强边信号**区间；  
+> `G20` 则在低/中同配区间更稳，更像一个泛化主线。
+
+##### 对 hierarchy 线的进一步修正
+
+在 9 数据控制网格上，`hier_on: B31 -> B32` 的总体平均竟然转为正值：
+
+- 平均 `ΔNMI = +0.001086`
+- 平均 `ΔARI = +0.001499`
+
+但拆开看后发现，这个正增益并不“普遍”：
+
+- 按模式：
+  - `mmisl`: 正增益
+  - `mredu`: 负增益
+  - `mhier`: 微负/近中性
+- 按同配性：
+  - `h45`: 近零
+  - `h65`: 小正
+  - `h85`: 较明显正
+
+因此 hierarchy 的更准确结论应改写为：
+
+> `B32/B37` 不是普遍劣于 `B31`，  
+> 但其收益高度依赖于“高同配”以及部分特殊 edge-control 机制，  
+> 暂时仍不适合作为统一主线，只适合作为**条件性分支**保留。
+
+#### B30 家族在当前阶段的最终判断（截至 round3）
+
+综合 `round1 -> round2 -> round3`，当前应采用**双主线、条件选择**的口径：
+
+- **泛化主线**：`G20`
+  - 适用于低/中同配，或边语义可能误导/错位的情形
+- **高信号主线**：`B36`
+  - 适用于高同配，且 edge semantics 更可能是层级/冗余但稳定有效的情形
+
+同时：
+
+- `B31`：保留为最干净的 `B30` 无 augment / 无 hierarchy 对照
+- `B32/B37`：保留为 hierarchy 条件性分支，不再视作当前主线
+
+这一结果也意味着，若继续推进 `B30` 家族，下一步更合理的目标不再是“继续调 hierarchy 的 top-k”，而是：
+
+1. 让 `B36` 在低/中同配区间更稳；  
+2. 或者直接进入更高层次的 **edge-conditioned message passing**，尝试弥补 `B36` 对错位边语义的脆弱性。
+
+#### B40 系列：转向 edge-conditioned message passing / refined edge-state pooling（已完成首轮）
+
+基于前述判断，下一阶段不再继续堆 `hierarchy/augment`，而是直接测试两条更接近“边信息进入树生成机制”的路线：
+
+- `B40`
+  - 以 `B31` 为底座
+  - 新增 **edge-conditioned message passing**
+  - 具体做法是在 leaf-level `LorentzAgg` 中用 `edge_attr -> gate factor` 调制消息图权重，并重新做 degree normalization
+- `B41`
+  - 以 `B32` 为底座
+  - 不加 message gating
+  - 只把层级 `edge-state pooling` 改为 **assignment-confidence weighted pooling**
+- `B42`
+  - 以 `B32` 为底座
+  - 同时启用 **message gating + confidence-weighted pooling**
+
+这轮首筛已经完成，结果目录：
+
+- `results/diagnostic_b40_round1_confirm60_v1/summary_by_condition.csv`
+- `results/diagnostic_b40_round1_confirm60_v1/summary_by_condition_dataset.csv`
+- `results/diagnostic_b40_round1_confirm60_v1/branch_health_summary.csv`
+
+实验设置：
+
+- 数据：`mredu / mmisl / mhier`
+- seeds：`0,1,2`
+- epochs：`60`
+- 对照：`baseline_v1`, `g20_se_consistent_main`, `B31`, `B36`, `B40`, `B41`, `B42`
+
+总体 `NMI` 排名为：
+
+1. `G20`: `0.02886`
+2. `B40`: `0.01929`
+3. `B42`: `0.01915`
+4. `B41`: `0.01571`
+5. `B36`: `0.01516`
+6. `B31`: `0.01499`
+7. `baseline`: `0.00678`
+
+分机制结果更说明问题：
+
+- `mhier`
+  - `G20`: `0.03275`
+  - `B40`: `0.02225`
+  - `B42`: `0.02201`
+  - `B41`: `0.01733`
+- `mmisl`
+  - `G20`: `0.01942`
+  - `B41`: `0.01614`
+  - `B31`: `0.01449`
+  - `B40`: `0.01429`
+- `mredu`
+  - `G20`: `0.03443`
+  - `B42`: `0.02152`
+  - `B40`: `0.02135`
+  - `B36`: `0.01474`
+
+可以得到三点结论。
+
+**第一，`edge-conditioned message passing` 确实比继续调 augment/hierarchy 更值得推进。**
+
+`B40` 相对 `B31` 的平均增益是：
+
+- `ΔNMI = +0.00430`
+- `ΔARI = +0.00348`
+
+并且收益主要来自：
+
+- `mhier`: `ΔNMI = +0.00550`
+- `mredu`: `ΔNMI = +0.00762`
+
+这说明 message gating 至少在“层级边语义”和“冗余但稳定的边语义”两类场景下，能比纯 assignment residual 更有效地把边信息转成聚类增益。
+
+**第二，只改 refined pooling（`B41`）的收益有限。**
+
+`B41` 相对 `B31` 的平均增益只有：
+
+- `ΔNMI = +0.00072`
+- `ΔARI = +0.00042`
+
+且主要只在 `mmisl/mhier` 上有轻微改善，在 `mredu` 上基本没有收益。  
+这说明当前瓶颈不在 pooling 的 top-k 细节，而更在于“leaf message graph 是否真的被 edge semantics 调制”。
+
+**第三，`B42` 没有再明显超过 `B40`。**
+
+`B42` 相对 `B40` 的平均差值为：
+
+- `ΔNMI = -0.00015`
+- `ΔARI = -0.00010`
+
+所以在当前实现下：
+
+> `confidence-weighted pooling` 并没有给已经启用 message gating 的模型再带来稳定额外收益；  
+> 这意味着下一步主线应优先围绕 `B40` 展开，而不是继续把 `B42` 当成默认升级版。
+
+同时，`branch_health_summary.csv` 也确认了这次不是“死分支假提升”：
+
+- `B40`: `diag_msg_live = 1.0`
+- `B42`: `diag_msg_live = 1.0`, `diag_hier_live = 1.0`
+- `B41`: `diag_hier_live = 1.0`
+- 所有条件 `diag_dead_branch_count_mean = 0`
+
+因此当前阶段的最准确判断应更新为：
+
+- **`G20` 仍是更稳的泛化主线**
+- **`B40` 是 `B30` 家族下一代最值得继续推进的新主候选**
+- `B41` 只证明 refined pooling 可行，但不足以单独成为主线
+- `B42` 说明“message gating + refined pooling”目前并非简单相加增益
+
+所以下一步应转入：
+
+1. 以 `B40 vs G20` 为核心，对更完整的控制变量网格做最终机制对决  
+2. 若 `B40` 在更广控制网格上继续稳于 `B31/B36`，再围绕 `B40` 做更细的 gate-scale / matched-edge / reliability 设计
+
+#### B40 扩展控制网格（9 datasets × 1 seed，已完成）
+
+为快速判断 `B40` 的适用区间，又补跑了一轮更广但较轻的区域图筛选：
+
+- 目录：`results/diagnostic_b40_round2_edgectrl9_s0_v1`
+- 数据：`mhier/mmisl/mredu × h45/h65/h85`
+- 条件：`baseline_v1`, `G20`, `B31`, `B36`, `B40`, `B42`
+- 设置：`seed=0`, `epochs=60`
+
+总体 `NMI` 排名：
+
+1. `B40`: `0.17499`
+2. `B42`: `0.17458`
+3. `G20`: `0.15094`
+4. `B36`: `0.14391`
+5. `B31`: `0.13640`
+6. `baseline`: `0.08793`
+
+这轮的价值主要在“区域图”而不是统计显著性。
+
+按同配性拆开：
+
+- `h45`
+  - `B36` 最好：`≈0.00971`
+  - `B40/B42` 仅略高于 baseline
+- `h65`
+  - `G20` 最好：`≈0.06187`
+  - `B40` 第二：`≈0.04096`
+- `h85`
+  - `B40` 最好：`≈0.47783`
+  - `B42` 紧随其后：`≈0.47769`
+
+按控制模式拆开：
+
+- `mhier`
+  - `B40` 最好：`≈0.18077`
+- `mmisl`
+  - `B40` 最好：`≈0.16416`
+- `mredu`
+  - `B40` 最好：`≈0.18003`
+
+这轮与上一轮 `3 seeds × 3 representative controls` 的关系应这样理解：
+
+- `round1_confirm60_v1` 给的是**更稳的 3-seed 判断**
+- `round2_edgectrl9_s0_v1` 给的是**更广的区域图判断**
+
+两轮并不矛盾：
+
+- 在 `h65` 的代表性 3-seed 控制组上，`G20` 仍更稳
+- 但在更广的 9-grid 区域图里，`B40` 在 `h85` 区间的优势非常明显，足以把整体均值抬到第一
+
+因此当前最稳的口径应是：
+
+> `B40` 已经成为比 `B31/B36` 更强的新一代 `B30` 家族候选；  
+> 它的优势主要来自 **high-homophily / high-signal** 区间，且在单 seed 区域图上对三类 edge-control 都表现出竞争力；  
+> 但若要把它升级成真正的统一主线，仍需对 `h65` 区间做更完整的多 seed 对决，并继续与 `G20` 正面比较。
+
+#### B40 message 分支调参与 B43 结构变体（已完成）
+
+为了把 “edge-conditioned message passing” 进一步拆解，又做了两件事：
+
+1. **结构变体**：`B43 = B40 + matched-edge-only message gating`
+2. **message gate 调参**：
+   - `B44`: `edge_msg_gate_scale = 0.20`
+   - `B45`: `edge_msg_gate_scale = 0.50`
+   - `B46`: `B40 + confidence gate`
+
+结果目录：
+
+- `results/diagnostic_b40_tuning_repr3_v1`
+- `results/diagnostic_b45_grid9_s0_v1`
+
+其中：
+
+- `diagnostic_b40_tuning_repr3_v1`
+  - 数据：`mredu/mmisl/mhier @ h65`
+  - seeds：`0,1,2`
+  - 用来做稳健筛选
+- `diagnostic_b45_grid9_s0_v1`
+  - 数据：`9-grid`
+  - seed：`0`
+  - 用来做区域图确认
+
+##### 调参筛选结果（3 controls × 3 seeds）
+
+总体 `NMI`：
+
+1. `B45`: `0.02984`
+2. `G20`: `0.02818`
+3. `B43`: `0.02003`
+4. `B40`: `0.01911`
+5. `B36`: `0.01661`
+6. `B31`: `0.01523`
+7. `B46`: `0.01461`
+8. `B44`: `0.01228`
+
+这说明三件事：
+
+**第一，gate scale 是真正敏感的主旋钮。**
+
+- 把 `edge_msg_gate_scale` 从 `0.35` 提到 `0.50`（`B45`）后，平均 `NMI` 从 `0.01911` 提到 `0.02984`
+- 且在三个代表性控制组上都提升：
+  - `mhier`: `0.02230 -> 0.03499`
+  - `mmisl`: `0.01378 -> 0.02106`
+  - `mredu`: `0.02126 -> 0.03347`
+
+**第二，`matched-edge-only`（`B43`）是正收益，但幅度有限。**
+
+- `B43` 相对 `B40` 有小幅改善
+- 但提升远不如直接把 gate scale 调大
+
+所以当前最值得保留的结构结论不是“B43 替代 B40”，而是：
+
+> `matched-edge-only` 有价值，但暂时只是辅助修正；  
+> 当前最强增益来源仍然是 **更充分的 message gating 强度**。
+
+**第三，confidence gate（`B46`）目前无效。**
+
+- `B46` 不仅没超过 `B40`，还低于 `B31/B36`
+- 这说明当前这版 “低置信度向 1 收缩” 做法过于保守，把有用 message gate 也压掉了
+
+##### `B45` 区域图确认（9-grid × 1 seed）
+
+总体 `NMI`：
+
+1. `B45`: `0.19981`
+2. `B40`: `0.17447`
+3. `B43`: `0.17431`
+4. `G20`: `0.15097`
+
+关键观察：
+
+- `h45`
+  - `B45` 没有优势，和 `B40/B43`、`G20` 一样都接近零区间
+- `h65`
+  - `B45` 已明显超过 `G20`
+  - `mhier`: `0.08588 > 0.07517`
+  - `mmisl`: `0.04341 > 0.03137`
+  - `mredu`: `0.08444 > 0.07924`
+- `h85`
+  - `B45` 优势更大，显著高于 `B40/B43/G20`
+
+因此当前 message 分支的最准确更新结论是：
+
+- `B40` 证明了 **edge-conditioned message passing** 方向成立
+- `B43` 证明了 **matched-edge-only** 是可用修正，但不是主增益来源
+- `B45` 则进一步说明：  
+  **真正需要继续深挖的，是 message gate 的强度与形状，而不是继续堆 hierarchy/augment**
+
+截至目前，`B30` 家族里最值得继续推进的消息分支主候选，已经从 `B40` 更新为：
+
+- **`B45 = B40 + stronger edge message gate`**
+
+#### `B45` 全量确认轮（9-grid × 3 seeds，已完成）
+
+为避免 `9-grid × 1 seed` 的区域图结论过早下判断，又补跑了完整确认轮：
+
+- 目录：`results/diagnostic_b45_confirm_grid9_v1`
+- 数据：`mhier/mmisl/mredu × h45/h65/h85`
+- 条件：`G20`, `B40`, `B45`
+- seeds：`0,1,2`
+- epochs：`60`
+
+总体 `NMI / ARI`：
+
+1. `B45`: `0.16001 / 0.15256`
+2. `B40`: `0.14575 / 0.13826`
+3. `G20`: `0.11657 / 0.10914`
+
+这轮的结论比之前更硬：
+
+**第一，`B45` 不只是单 seed 偶然占优，而是在全量 `9-grid × 3 seeds` 上稳定领先。**
+
+- 相对 `B40`
+  - `ΔNMI = +0.01426`
+  - `ΔARI = +0.01430`
+- 相对 `G20`
+  - `ΔNMI = +0.04343`
+  - `ΔARI = +0.04342`
+
+**第二，`B45` 的优势主要来自中高同配区间，而不是低同配区。**
+
+按同配性汇总：
+
+- `h45`
+  - `G20`: `0.00715`
+  - `B40`: `0.00676`
+  - `B45`: `0.00683`
+- `h65`
+  - `G20`: `0.02951`
+  - `B40`: `0.01914`
+  - `B45`: `0.03040`
+- `h85`
+  - `G20`: `0.31306`
+  - `B40`: `0.41135`
+  - `B45`: `0.44279`
+
+这说明：
+
+> `B45` 不是“任何图都更强”，  
+> 它真正的稳定收益区间是 **中高同配 + 边语义可被 message gate 利用** 的场景；  
+> 在 `h45` 低同配区间，它并没有显著优于 `G20`。
+
+**第三，`B45` 对三类 edge-control 都形成了整体优势。**
+
+按控制模式汇总：
+
+- `mhier`
+  - `G20`: `0.11287`
+  - `B40`: `0.14231`
+  - `B45`: `0.15404`
+- `mmisl`
+  - `G20`: `0.12197`
+  - `B40`: `0.14938`
+  - `B45`: `0.16721`
+- `mredu`
+  - `G20`: `0.11488`
+  - `B40`: `0.14555`
+  - `B45`: `0.15877`
+
+也就是说，在这批控制实验里，`B45` 已经不只是“对某一类机制有效”，而是在：
+
+- 层级边语义
+- 误导边语义
+- 冗余边语义
+
+三种模式下都能超过 `G20`。
+
+同时，`branch_health_summary.csv` 也表明这不是死分支或统计幻觉：
+
+- `B45`: `diag_factor_live = 1.0`
+- `B45`: `diag_dual_live = 1.0`
+- `B45`: `diag_msg_live = 1.0`
+- `B45`: `diag_assign_live = 1.0`
+- `diag_dead_branch_count = 0.0`
+
+因此这轮之后，`B45` 的定位应更新为：
+
+> **`B45` 已经成为当前控制实验体系下，`B30` 家族最强、且整体上超过 `G20` 的新主候选。**
+
+#### `B47 / B48` 结构修正对照（已完成）
+
+在确认 `B45` 为 message 主候选后，又补了两个更保守的结构修正：
+
+- `B47 = B45 + matched-edge-only`
+- `B48 = B45 + confidence gate`
+
+结果目录：
+
+- `results/diagnostic_b47b48_repr3_v1`
+
+设置：
+
+- 数据：`mredu/mmisl/mhier @ h65`
+- seeds：`0,1,2`
+- 对照：`G20`, `B40`, `B45`, `B47`, `B48`
+
+总体 `NMI / ARI`：
+
+1. `B47`: `0.03029 / 0.01637`
+2. `B45`: `0.03000 / 0.01604`
+3. `G20`: `0.02885 / 0.01587`
+4. `B48`: `0.01961 / 0.00798`
+5. `B40`: `0.01921 / 0.00773`
+
+更细看三类机制：
+
+- `mhier`
+  - `B47`: `0.03452`
+  - `B45`: `0.03446`
+  - `G20`: `0.03337`
+- `mmisl`
+  - `B47`: `0.02272`
+  - `B45`: `0.02191`
+  - `G20`: `0.01887`
+- `mredu`
+  - `G20`: `0.03430`
+  - `B45`: `0.03362`
+  - `B47`: `0.03362`
+
+因此这组对照给出两个清楚结论：
+
+**第一，`matched-edge-only` 是一个可保留的小修正，但不是主增益来源。**
+
+`B47` 的确略高于 `B45`，但幅度非常小：
+
+- `ΔNMI(B47-B45) = +0.00029`
+- `ΔARI(B47-B45) = +0.00033`
+
+这说明：
+
+> `matched-edge-only` 更像是在高强度 message gate 上做边界收缩，  
+> 它可以作为稳健性修饰项，但不构成新的主方向。
+
+**第二，confidence gate 当前版本应直接放弃。**
+
+`B48` 基本退回到 `B40` 水平，远低于 `B45/B47`。  
+原因也比较直接：当前这版 confidence gate 把 message factor 过度压向 `1`，使得强门控收益被抵消。
+
+所以这一轮后，message 分支在这批 `repr3 @ h65` 对照上的排序应更新为：
+
+1. `B45`
+2. `B47`
+3. `G20`
+4. `B40`
+5. `B48`
+
+其中：
+
+- **默认主候选仍是 `B45`**
+- `B47` 保留为“可选的保守 matched-edge 修正版”
+- `B48` 不再继续推进
+
 ### 必须补齐的实验清单（含默认值与预估算力）
 
 下表给出一组“最低可发表”补实验矩阵。时间为经验估计（以单张 24GB GPU、PyTorch 2.1+、图全量训练为参考；实际需以你们的硬件与图规模校准）。

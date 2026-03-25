@@ -6,20 +6,31 @@ from utils.model_utils import select_activation
 
 class LSENet(nn.Module):
     def __init__(self, manifold, in_dim, hid_dim, max_nums,
-                 temperature=0.2, dropout=0.5, nonlin_str='relu'):
+                 temperature=0.2, dropout=0.5, nonlin_str='relu',
+                 leaf_use_att=False, leaf_att_mode="legacy",
+                 num_input_lconvs=2, assign_att_mode="legacy",
+                 assign_gumbel=True):
         super(LSENet, self).__init__()
         assert max_nums is not None
         self.manifold = manifold
         self.max_nums = max_nums  # [N_{H-1}, ..., N_1]
         self.height = len(max_nums) + 1
+        self.num_input_lconvs = num_input_lconvs
 
         # Project input to Lorentz space (d+1)
-        self.input_proj = LorentzGraphConvolution(manifold, in_dim + 1, hid_dim + 1,
-                                                  True, dropout, False,
-                                                  select_activation(nonlin_str))
-        self.input_proj2 = LorentzGraphConvolution(manifold, hid_dim + 1, hid_dim + 1,
-                                                  True, dropout, False,
-                                                  select_activation(nonlin_str))
+        self.input_projs = nn.ModuleList()
+        input_dims = [in_dim + 1] + [hid_dim + 1] * max(0, num_input_lconvs - 1)
+        for layer_idx, curr_in_dim in enumerate(input_dims):
+            self.input_projs.append(LorentzGraphConvolution(
+                manifold,
+                curr_in_dim,
+                hid_dim + 1,
+                True,
+                dropout,
+                leaf_use_att,
+                select_activation(nonlin_str),
+                att_mode=leaf_att_mode,
+            ))
         self.dropout = nn.Dropout(dropout)
 
         # Build layers bottom-up: layer[0] = leaf → level H-1; layer[-1] = level 1 → root
@@ -29,7 +40,9 @@ class LSENet(nn.Module):
             self.layers.append(LSENetLayer(
                 manifold, curr_dim, hid_dim + 1, max_nums[i],
                 dropout=dropout, temperature=temperature,
-                nonlin=select_activation(nonlin_str)
+                nonlin=select_activation(nonlin_str),
+                assign_att_mode=assign_att_mode,
+                assign_gumbel=assign_gumbel,
             ))
             curr_dim = hid_dim + 1  # parent embedding dim
 
@@ -38,8 +51,8 @@ class LSENet(nn.Module):
         o = torch.zeros_like(x[:, :1])                # (N, 1)
         x = torch.cat([o, x], dim=1)           # (N, d+1)
         x = self.manifold.expmap0(x)                  # project to Lorentz
-        x = self.input_proj(x, adj)  # (N, d + 1)
-        x = self.input_proj2(x, adj)
+        for input_proj in self.input_projs:
+            x = input_proj(x, adj)
         return x
 
     def forward(self, x, adj):

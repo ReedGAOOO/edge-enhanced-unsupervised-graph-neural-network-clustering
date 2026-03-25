@@ -7,6 +7,7 @@ from data import load_data
 from logger import create_logger
 from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
 from torch.optim import AdamW
+from torch.optim import Adam
 import math
 
 
@@ -35,8 +36,19 @@ class Exp:
                         nonlin_str=self.configs.nonlin,
                         max_nums=self.configs.max_nums,
                         alpha=self.configs.alpha,
-                        knn=self.configs.knn).to(device)
-            optimizer = AdamW(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
+                        knn=self.configs.knn,
+                        leaf_use_att=self.configs.leaf_use_att,
+                        leaf_att_mode=self.configs.leaf_att_mode,
+                        num_input_lconvs=self.configs.num_input_lconvs,
+                        assign_att_mode=self.configs.assign_att_mode,
+                        assign_gumbel=self.configs.assign_gumbel,
+                        paper_graph_fusion=self.configs.paper_graph_fusion).to(device)
+            if self.configs.optimizer == 'adam':
+                optimizer = Adam(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
+            elif self.configs.optimizer == 'riemannianadam':
+                optimizer = RiemannianAdam(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
+            else:
+                optimizer = AdamW(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
             if self.configs.task == 'Clustering':
                 nmi, ari = self.train_clu(data, model, optimizer, logger)
                 total_nmi.append(nmi)

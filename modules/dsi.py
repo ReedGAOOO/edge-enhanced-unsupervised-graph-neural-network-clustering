@@ -19,10 +19,20 @@ class DSI(nn.Module):
                  edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0,
                  edge_attr_dim=1,
                  edge_attr_hierarchical=False,
+                 edge_attr_pool_topk=1,
+                 edge_msg_conditioned=False,
+                 edge_msg_gate_scale=0.35,
+                 edge_msg_matched_only=False,
+                 edge_msg_confidence_gate=False,
+                 edge_msg_confidence_temp=1.0,
+                 edge_attr_pool_confidence=False,
+                 edge_attr_pool_conf_power=1.0,
                  edge_weight_learn_reg_lambda=0.02,
                  edge_weight_learn_logclip=0.8,
                  edge_weight_learn_temp=1.0,
                  edge_weight_learn_apply_to='both',
+                 edge_aug_prior_scale=0.0,
+                 edge_aug_prior_mode='raw',
                  knn_mode='auto', knn_auto_threshold=20000):
         super(DSI, self).__init__()
         self.num_nodes = num_nodes
@@ -47,6 +57,14 @@ class DSI(nn.Module):
             edge_attr_fusion_scale=edge_attr_fusion_scale,
             edge_attr_dim=edge_attr_dim,
             edge_attr_hierarchical=bool(edge_attr_hierarchical),
+            edge_attr_pool_topk=int(edge_attr_pool_topk),
+            edge_msg_conditioned=bool(edge_msg_conditioned),
+            edge_msg_gate_scale=float(edge_msg_gate_scale),
+            edge_msg_matched_only=bool(edge_msg_matched_only),
+            edge_msg_confidence_gate=bool(edge_msg_confidence_gate),
+            edge_msg_confidence_temp=float(edge_msg_confidence_temp),
+            edge_attr_pool_confidence=bool(edge_attr_pool_confidence),
+            edge_attr_pool_conf_power=float(edge_attr_pool_conf_power),
         )
         self.lorentz_proj = LorentzBoost(hid_dim + 1)
         self.temperature = temperature
@@ -62,18 +80,31 @@ class DSI(nn.Module):
         self.edge_weight_learn_apply_to = str(edge_weight_learn_apply_to).lower()
         if self.edge_weight_learn_apply_to not in {'si_only', 'both'}:
             self.edge_weight_learn_apply_to = 'both'
+        self.edge_aug_prior_scale = float(edge_aug_prior_scale)
+        self.edge_aug_prior_mode = str(edge_aug_prior_mode).lower()
+        if self.edge_aug_prior_mode not in {'raw', 'positive', 'tanh'}:
+            self.edge_aug_prior_mode = 'raw'
 
         self.last_edge_factor_mean = 1.0
         self.last_edge_factor_std = 0.0
+        self.last_edge_factor_msg_mean = 1.0
+        self.last_edge_factor_msg_std = 0.0
+        self.last_edge_factor_si_mean = 1.0
+        self.last_edge_factor_si_std = 0.0
+        self.last_edge_aug_bias_mean = 0.0
+        self.last_edge_aug_bias_std = 0.0
         self.last_edge_reg = 0.0
 
         if self._use_learnable_edge_weight_variant():
             hidden = max(8, int(edge_attr_hidden_dim))
+            out_dim = 1
+            if self._use_dual_edge_weight_variant():
+                out_dim = 3 if self._use_edge_aug_prior_variant() else 2
             self.edge_weight_mapper = nn.Sequential(
                 nn.Linear(int(max(1, edge_attr_dim)), hidden),
                 nn.ReLU(),
                 nn.Dropout(dropout),
-                nn.Linear(hidden, 1),
+                nn.Linear(hidden, out_dim),
             )
         else:
             self.edge_weight_mapper = None
@@ -88,6 +119,12 @@ class DSI(nn.Module):
             stats = self.encoder.get_edge_adaptive_stats()
         stats["edge_factor_mean"] = float(self.last_edge_factor_mean)
         stats["edge_factor_std"] = float(self.last_edge_factor_std)
+        stats["edge_factor_msg_mean"] = float(self.last_edge_factor_msg_mean)
+        stats["edge_factor_msg_std"] = float(self.last_edge_factor_msg_std)
+        stats["edge_factor_si_mean"] = float(self.last_edge_factor_si_mean)
+        stats["edge_factor_si_std"] = float(self.last_edge_factor_si_std)
+        stats["edge_aug_bias_mean"] = float(self.last_edge_aug_bias_mean)
+        stats["edge_aug_bias_std"] = float(self.last_edge_aug_bias_std)
         stats["edge_reg"] = float(self.last_edge_reg)
         return stats
 
@@ -95,30 +132,34 @@ class DSI(nn.Module):
         features = data.x
         adj = getattr(data, "adj_msg", data.adj).clone()
         if self._use_learnable_edge_weight_variant():
+            head = 'msg' if self._use_dual_edge_weight_variant() else 'shared'
             adj, _ = self._apply_learned_edge_weight_to_adj(
                 base_adj=getattr(data, "adj_msg", data.adj),
                 target_adj=adj,
                 base_edge_attr=getattr(data, "edge_attr", None),
                 normalize_for_message=True,
+                head=head,
             )
         use_edge_attr = self._use_edge_attr_variant()
         edge_attr = getattr(data, "edge_attr", None) if use_edge_attr else None
-        tree_coord_dict, ass_dict, adj_dict = self.encoder(features, adj, edge_attr=edge_attr, use_edge_attr=use_edge_attr)
+        tree_coord_dict, ass_dict, adj_dict = self.encoder(features, adj, edge_attr=edge_attr, edge_mask=None, use_edge_attr=use_edge_attr)
         return tree_coord_dict, ass_dict, adj_dict
 
     def get_cluster_results(self, data):
         features = data.x
         adj = getattr(data, "adj_msg", data.adj).clone()
         if self._use_learnable_edge_weight_variant():
+            head = 'msg' if self._use_dual_edge_weight_variant() else 'shared'
             adj, _ = self._apply_learned_edge_weight_to_adj(
                 base_adj=getattr(data, "adj_msg", data.adj),
                 target_adj=adj,
                 base_edge_attr=getattr(data, "edge_attr", None),
                 normalize_for_message=True,
+                head=head,
             )
         use_edge_attr = self._use_edge_attr_variant()
         edge_attr = getattr(data, "edge_attr", None) if use_edge_attr else None
-        coord_dict, ass_dict, _ = self.encoder(features, adj, edge_attr=edge_attr, use_edge_attr=use_edge_attr)
+        coord_dict, ass_dict, _ = self.encoder(features, adj, edge_attr=edge_attr, edge_mask=None, use_edge_attr=use_edge_attr)
         embed_dict = {}
         for height, x in coord_dict.items():
             embed_dict[height] = x.detach()
@@ -157,48 +198,92 @@ class DSI(nn.Module):
         self.last_edge_reg = 0.0
         adj_base_msg = getattr(data, "adj_msg", data.adj).clone()
         adj_base_si = getattr(data, "adj_si", adj_base_msg).clone()
+        base_edge_attr = getattr(data, "edge_attr", None)
+        aug_prior_bias = None
+        if self._use_edge_aug_prior_variant():
+            aug_prior_bias = self._edge_prior_bias_for_base_adj(adj_base_msg, base_edge_attr)
 
         if self._use_edge_knn_mode(data.x.shape[0]):
             # For large-graph edge mode, stop gradient through adjacency construction.
             with torch.no_grad():
-                z_leaf = self.encoder.embed_leaf(data.x, adj_base_msg)
+                z_leaf = self.encoder.embed_leaf(
+                    data.x,
+                    adj_base_msg,
+                    edge_attr=base_edge_attr if self._use_edge_attr_variant() else None,
+                    edge_mask=None,
+                    use_edge_attr=self._use_edge_attr_variant(),
+                )
                 z_leaf = self.lorentz_proj(z_leaf)
-                adj_aug = self._edge_candidate_adj(z_leaf, adj_base_msg, self.knn)
+                adj_aug = self._edge_candidate_adj(z_leaf, adj_base_msg, self.knn, edge_bias=aug_prior_bias)
         else:
-            z_leaf = self.encoder.embed_leaf(data.x, adj_base_msg)
+            z_leaf = self.encoder.embed_leaf(
+                data.x,
+                adj_base_msg,
+                edge_attr=base_edge_attr if self._use_edge_attr_variant() else None,
+                edge_mask=None,
+                use_edge_attr=self._use_edge_attr_variant(),
+            )
             z_leaf = self.lorentz_proj(z_leaf)
             neg_dist2 = 2 + 2 * self.manifold.cinner(z_leaf, z_leaf)
-            adj_aug = graph_top_K(torch.softmax(neg_dist2 / self.tau, dim=-1), k=self.knn)
+            score_dense = neg_dist2 / self.tau
+            if aug_prior_bias is not None and float(self.edge_aug_prior_scale) > 0.0:
+                prior_dense = torch.sparse_coo_tensor(
+                    adj_base_msg.coalesce().indices(),
+                    aug_prior_bias.to(dtype=score_dense.dtype, device=score_dense.device),
+                    size=adj_base_msg.size(),
+                    device=score_dense.device,
+                ).to_dense()
+                score_dense = score_dense + float(self.edge_aug_prior_scale) * prior_dense
+            adj_aug = graph_top_K(torch.softmax(score_dense, dim=-1), k=self.knn)
 
         adj_train_msg = (self.alpha * adj_aug + adj_base_msg).coalesce()
         adj_train_si = (self.alpha * adj_aug + adj_base_si).coalesce()
 
         edge_reg_raw = adj_train_msg.values().new_tensor(0.0)
         if self._use_learnable_edge_weight_variant():
-            base_edge_attr = getattr(data, "edge_attr", None)
-            adj_train_si, reg_si = self._apply_learned_edge_weight_to_adj(
-                base_adj=adj_base_si,
-                target_adj=adj_train_si,
-                base_edge_attr=base_edge_attr,
-                normalize_for_message=False,
-            )
-            edge_reg_raw = reg_si
-            if self.edge_weight_learn_apply_to == 'both':
+            if self._use_dual_edge_weight_variant():
+                adj_train_si, reg_si = self._apply_learned_edge_weight_to_adj(
+                    base_adj=adj_base_si,
+                    target_adj=adj_train_si,
+                    base_edge_attr=base_edge_attr,
+                    normalize_for_message=False,
+                    head='si',
+                )
                 adj_train_msg, reg_msg = self._apply_learned_edge_weight_to_adj(
                     base_adj=adj_base_msg,
                     target_adj=adj_train_msg,
                     base_edge_attr=base_edge_attr,
                     normalize_for_message=True,
+                    head='msg',
                 )
                 edge_reg_raw = 0.5 * (reg_si + reg_msg)
+            else:
+                adj_train_si, reg_si = self._apply_learned_edge_weight_to_adj(
+                    base_adj=adj_base_si,
+                    target_adj=adj_train_si,
+                    base_edge_attr=base_edge_attr,
+                    normalize_for_message=False,
+                    head='shared',
+                )
+                edge_reg_raw = reg_si
+                if self.edge_weight_learn_apply_to == 'both':
+                    adj_train_msg, reg_msg = self._apply_learned_edge_weight_to_adj(
+                        base_adj=adj_base_msg,
+                        target_adj=adj_train_msg,
+                        base_edge_attr=base_edge_attr,
+                        normalize_for_message=True,
+                        head='shared',
+                    )
+                    edge_reg_raw = 0.5 * (reg_si + reg_msg)
 
         use_edge_attr = self._use_edge_attr_variant()
         edge_attr = None
+        edge_mask = None
         if use_edge_attr:
             edge_attr_base = getattr(data, "edge_attr", None)
-            edge_attr = self._align_edge_attr_to_adj(adj_base_msg, edge_attr_base, adj_train_msg)
+            edge_attr, edge_mask = self._align_edge_attr_to_adj_with_mask(adj_base_msg, edge_attr_base, adj_train_msg)
         _, ass_aug_dict, _ = self.encoder(
-            data.x, adj_train_msg, edge_attr=edge_attr, use_edge_attr=use_edge_attr
+            data.x, adj_train_msg, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=use_edge_attr
         )
         adj_si_dict = self._build_hierarchy_adj_from_assign(adj_train_si, ass_aug_dict)
         loss = self._si_loss(ass_aug_dict, adj_si_dict, eps)
@@ -209,10 +294,16 @@ class DSI(nn.Module):
         return loss
 
     def _use_edge_attr_variant(self) -> bool:
-        return self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13'}
+        return self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13', 'V31', 'V32', 'V33'}
 
     def _use_learnable_edge_weight_variant(self) -> bool:
-        return self.edge_variant in {'V20'}
+        return self.edge_variant in {'V20', 'V30', 'V31', 'V32', 'V33'}
+
+    def _use_dual_edge_weight_variant(self) -> bool:
+        return self.edge_variant in {'V30', 'V31', 'V32', 'V33'}
+
+    def _use_edge_aug_prior_variant(self) -> bool:
+        return self.edge_variant in {'V33'}
 
     @staticmethod
     def _ass_adj_ass(ass: torch.Tensor, adj: torch.Tensor):
@@ -243,7 +334,7 @@ class DSI(nn.Module):
             return False
         return int(num_nodes) > int(self.knn_auto_threshold)
 
-    def _edge_candidate_adj(self, z_leaf, adj, k: int):
+    def _edge_candidate_adj(self, z_leaf, adj, k: int, edge_bias: torch.Tensor | None = None):
         adj_coo = adj.coalesce()
         edge_index = adj_coo.indices()
         num_nodes = z_leaf.shape[0]
@@ -256,6 +347,11 @@ class DSI(nn.Module):
         # Edge-wise score; do not materialize an [E, E] matrix.
         score = 2 + 2 * self.manifold.inner(z_leaf[src], z_leaf[dst], keepdim=False)
         score = score / float(self.tau)
+        if edge_bias is not None and edge_bias.numel() > 0 and float(self.edge_aug_prior_scale) > 0.0:
+            edge_bias = edge_bias.to(dtype=score.dtype, device=score.device)
+            if edge_bias.shape[0] == adj_coo.values().shape[0]:
+                edge_bias = torch.cat([edge_bias, torch.zeros(num_nodes, dtype=edge_bias.dtype, device=edge_bias.device)], dim=0)
+            score = score + float(self.edge_aug_prior_scale) * edge_bias
         edge_index, score = self._topk_edges_per_src(edge_index, score, num_nodes=num_nodes, k=int(k))
         src = edge_index[0]
         prob = scatter_softmax(score, src, dim=0)
@@ -336,54 +432,112 @@ class DSI(nn.Module):
             target_attr[matched] = base_attr[mapped]
         return target_attr, matched
 
-    def _edge_factor_from_attr(self, edge_attr: torch.Tensor, matched: torch.Tensor | None):
+    def _edge_scores_and_factors_from_attr(self, edge_attr: torch.Tensor, matched: torch.Tensor | None):
         if edge_attr.dim() == 1:
             edge_attr = edge_attr.unsqueeze(1)
         edge_attr = edge_attr.float()
         if self.edge_weight_mapper is None:
-            ones = torch.ones(edge_attr.shape[0], dtype=edge_attr.dtype, device=edge_attr.device)
+            ones = torch.ones((edge_attr.shape[0], 1), dtype=edge_attr.dtype, device=edge_attr.device)
+            zeros = torch.zeros_like(ones)
             zero = torch.zeros((), dtype=edge_attr.dtype, device=edge_attr.device)
-            return ones, zero
+            return zeros, ones, zero
 
-        score = self.edge_weight_mapper(edge_attr).squeeze(-1)
+        score = self.edge_weight_mapper(edge_attr)
         score = score / float(self.edge_weight_learn_temp)
         score = torch.tanh(score) * float(self.edge_weight_learn_logclip)
 
         if matched is not None and matched.any():
-            score = score - score[matched].mean()
+            score = score - score[matched].mean(dim=0, keepdim=True)
         else:
-            score = score - score.mean()
+            score = score - score.mean(dim=0, keepdim=True)
 
         score = score.clamp(-float(self.edge_weight_learn_logclip), float(self.edge_weight_learn_logclip))
         factor = torch.exp(score)
         if matched is not None:
-            factor = torch.where(matched, factor, torch.ones_like(factor))
+            factor = torch.where(matched.unsqueeze(1), factor, torch.ones_like(factor))
             eff = matched
         else:
-            eff = torch.ones_like(factor, dtype=torch.bool)
+            eff = torch.ones(score.shape[0], dtype=torch.bool, device=score.device)
 
         if eff.any():
             reg_anchor = torch.mean(score[eff] ** 2)
-            reg_scale = (factor[eff].mean() - 1.0) ** 2
+            reg_scale = torch.mean((factor[eff] - 1.0) ** 2)
             reg = reg_anchor + 0.1 * reg_scale
-            self.last_edge_factor_mean = float(factor[eff].detach().mean().item())
-            self.last_edge_factor_std = float(factor[eff].detach().std(unbiased=False).item())
+            factor_eff = factor[eff]
+            self.last_edge_factor_mean = float(factor_eff.detach().mean().item())
+            self.last_edge_factor_std = float(factor_eff.detach().std(unbiased=False).item())
+            self.last_edge_factor_msg_mean = float(factor_eff[:, 0].detach().mean().item())
+            self.last_edge_factor_msg_std = float(factor_eff[:, 0].detach().std(unbiased=False).item())
+            if factor_eff.shape[1] >= 2:
+                self.last_edge_factor_si_mean = float(factor_eff[:, 1].detach().mean().item())
+                self.last_edge_factor_si_std = float(factor_eff[:, 1].detach().std(unbiased=False).item())
+            else:
+                self.last_edge_factor_si_mean = self.last_edge_factor_msg_mean
+                self.last_edge_factor_si_std = self.last_edge_factor_msg_std
+            if score.shape[1] >= 3:
+                self.last_edge_aug_bias_mean = float(score[eff, 2].detach().mean().item())
+                self.last_edge_aug_bias_std = float(score[eff, 2].detach().std(unbiased=False).item())
+            else:
+                self.last_edge_aug_bias_mean = 0.0
+                self.last_edge_aug_bias_std = 0.0
         else:
             reg = factor.new_tensor(0.0)
             self.last_edge_factor_mean = 1.0
             self.last_edge_factor_std = 0.0
-        return factor, reg
+            self.last_edge_factor_msg_mean = 1.0
+            self.last_edge_factor_msg_std = 0.0
+            self.last_edge_factor_si_mean = 1.0
+            self.last_edge_factor_si_std = 0.0
+            self.last_edge_aug_bias_mean = 0.0
+            self.last_edge_aug_bias_std = 0.0
+        return score, factor, reg
 
-    def _apply_learned_edge_weight_to_adj(self, base_adj, target_adj, base_edge_attr, normalize_for_message: bool):
+    @staticmethod
+    def _edge_head_index(head: str) -> int:
+        if head == 'si':
+            return 1
+        if head == 'aug':
+            return 2
+        return 0
+
+    def _edge_prior_bias_for_base_adj(self, base_adj, base_edge_attr):
+        if (not self._use_edge_aug_prior_variant()) or self.edge_weight_mapper is None:
+            return None
+        if base_edge_attr is None or base_edge_attr.numel() == 0:
+            return None
+        base = base_adj.coalesce()
+        edge_attr = base_edge_attr.float().to(base.values().device)
+        if edge_attr.shape[0] != base.indices().shape[1]:
+            return None
+        raw_score, _, _ = self._edge_scores_and_factors_from_attr(edge_attr, matched=None)
+        if raw_score.shape[1] <= 2:
+            return None
+        bias = raw_score[:, 2]
+        if self.edge_aug_prior_mode == 'positive':
+            bias = torch.relu(bias)
+        elif self.edge_aug_prior_mode == 'tanh':
+            bias = torch.tanh(bias)
+        return bias
+
+    def _apply_learned_edge_weight_to_adj(self, base_adj, target_adj, base_edge_attr, normalize_for_message: bool, head: str = 'shared'):
         edge_attr, matched = self._align_edge_attr_to_adj_with_mask(base_adj, base_edge_attr, target_adj)
         if edge_attr is None or edge_attr.numel() == 0:
             self.last_edge_factor_mean = 1.0
             self.last_edge_factor_std = 0.0
+            self.last_edge_factor_msg_mean = 1.0
+            self.last_edge_factor_msg_std = 0.0
+            self.last_edge_factor_si_mean = 1.0
+            self.last_edge_factor_si_std = 0.0
+            self.last_edge_aug_bias_mean = 0.0
+            self.last_edge_aug_bias_std = 0.0
             return target_adj.coalesce(), target_adj.values().new_tensor(0.0)
 
         tgt = target_adj.coalesce()
         matched_dev = matched.to(tgt.values().device) if matched is not None else None
-        factor, reg = self._edge_factor_from_attr(edge_attr.to(tgt.values().device), matched_dev)
+        _, factor_all, reg = self._edge_scores_and_factors_from_attr(edge_attr.to(tgt.values().device), matched_dev)
+        head_idx = 0 if head == 'shared' else self._edge_head_index(head)
+        head_idx = min(int(head_idx), int(factor_all.shape[1] - 1))
+        factor = factor_all[:, head_idx]
         new_val = tgt.values() * factor.to(dtype=tgt.values().dtype, device=tgt.values().device)
         out = torch.sparse_coo_tensor(tgt.indices(), new_val, size=tgt.size(), device=tgt.device).coalesce()
         if normalize_for_message:
