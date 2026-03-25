@@ -12,6 +12,8 @@ Unsupervised graph clustering built on DSE/LSEnet, with edge-aware variants cent
 
 `tools/run_preset.py` now defaults to `b45_v31_msgcond_gs050`.
 
+`B45` is the current mainline because it changes the baseline at the three highest-leverage points without rewriting the structural-entropy objective itself: it keeps the original scalar SE loss, adds dual scalar edge weights for `adj_msg/adj_si`, preserves the calibrated `V31` assignment residual, and further introduces edge-conditioned message passing at the leaf encoder so that `edge_attr` can directly reshape the message graph before the partition tree is grown. Compared with the baseline, this is the first version in the repo that uses edge information simultaneously in representation learning, assignment, and SE-consistent structure weighting while still staying numerically stable through bounded gates, graph re-normalization, and the unchanged `_si_loss()` trunk.
+
 ## Quick Start
 
 ```bash
@@ -153,157 +155,23 @@ So the current message-branch ordering is:
 4. `B40`
 5. `B48`
 
-### Structure display (Baseline / G20 / B45)
+### Minimal dataflow summary
 
 ```text
-[Baseline / V1]
-[Raw Dataset]
-  |- node features: X
-  |- edges: edge_index
-  `- edge_attr (ignored by V1 score path)
-        |
-        v
-[Build Base Graph]
-  A0_msg = normalize(edge_index, edge_weight)
-  A0_si  = edge_index, edge_weight
-        |
-        +--------------------+
-        |                    |
-        v                    v
-[Leaf Embedding Pipeline]    [Original Topology Prior]
-  X --(append 0 dim)--> [0, X]      A0_msg / A0_si
-      --(expmap0)--> X_Lorentz      |
-      --(LorentzGraphConv #1)-->    |
-      --(LorentzGraphConv #2)--> z_leaf
-        |                            |
-        v                            |
-[Learned Augmented Graph from z_leaf]|
-  similarity(z_leaf, z_leaf)         |
-      -> topK + softmax -> A_aug     |
-        |                            |
-        +-------------+--------------+
-                      |
-                      v
-[Mixed Training Graph]
-  A_train_msg = A0_msg + alpha * A_aug
-  A_train_si  = A0_si  + alpha * A_aug
-                      |
-                      v
-[Assignment Core]
-  ass0 = softmax(W * logmap0(z))
-  att  = softmax_j(-dist(q_i, k_j)) on A_train_msg edges
-  ass1 = att @ ass0
-  S    = gumbel_softmax(log(ass1))
-                      |
-                      v
-[Hierarchical Coarsening + SI]
-  X_parent = S^T X_current
-  A_parent = S^T A_current S
-  SI-loss over hierarchy on A_train_si
+Baseline / V1
+  node features -> Lorentz leaf encoder -> trunk assignment -> scalar SE loss
+
+G20 / V20
+  edge_attr -> scalar edge factors -> reweighted adj_msg/adj_si -> trunk assignment -> scalar SE loss
+
+B45 / V31 + msg-cond
+  edge_attr -> message gate -> reweighted leaf message graph
+          +-> dual scalar edge factors for adj_msg/adj_si
+          +-> calibrated V31 assignment residual
+  -> partition tree -> unchanged scalar SE loss
 ```
 
-```text
-[G20 / V20]
-[Raw Dataset]
-  |- node features: X
-  |- edges: edge_index
-  `- edge_attr (native or constructed)
-        |
-        v
-[Data Edge Preparation]
-  edge_weight + edge_attr -> A0_msg, A0_si
-        |
-        +--------------------+
-        |                    |
-        v                    v
-[Leaf Embedding Pipeline]    [Topology prior]
-  X -> [0,X] -> expmap0 -> LorentzConv x2 -> z_leaf
-        |                                   |
-        v                                   |
-[Learned Augmented Graph]                   |
-  similarity(z_leaf, z_leaf) -> A_aug       |
-        |                                   |
-        +-------------+---------------------+
-                      |
-                      v
-[Mixed Training Graph]
-  A_train_msg = A0_msg + alpha * A_aug
-  A_train_si  = A0_si  + alpha * A_aug
-                      |
-                      v
-[SE-Consistent Edge Integration]
-  align edge_attr to training edges
-  f_ij = exp(clamp(tanh(mapper(edge_attr_ij))))   (bounded > 0)
-  A*_si  = A_train_si  ⊙ f
-  A*_msg = A_train_msg ⊙ f   (optional, apply_to=both)
-  edge_reg = lambda * regularize(log f)
-                      |
-                      v
-[Assignment Core (trunk only)]
-  ass0 = softmax(W * logmap0(z))
-  att  = softmax_j(-dist(q_i, k_j)) on A*_msg
-  S    = gumbel_softmax(log(att @ ass0))
-                      |
-                      v
-[Hierarchical Coarsening + Final Loss]
-  X_parent = S^T X_current
-  A_parent = S^T A_current S
-  objective = SI-loss(on A*_si hierarchy) + edge_reg
-```
-
-```text
-[B45 / V31 + edge-conditioned message passing]
-[Raw Dataset]
-  |- node features: X
-  |- edges: edge_index
-  `- edge_attr (native or constructed)
-        |
-        v
-[Data Edge Preparation]
-  edge_weight + edge_attr -> A0_msg, A0_si
-        |
-        +--------------------+
-        |                    |
-        v                    v
-[Leaf Embedding Pipeline with Message Gate]   [Topology prior]
-  edge_attr --(edge_gate_mlp)--> gate_raw
-           --(normalize+tanh*scale+exp)--> factor_msg
-  A0_msg --(reweight + renorm)--> A0_msg*
-  X -> [0,X] -> expmap0 -> LorentzConv x2 on A0_msg* -> z_leaf
-        |                                   |
-        v                                   |
-[Learned Augmented Graph]                   |
-  similarity(z_leaf, z_leaf) -> A_aug       |
-        |                                   |
-        +-------------+---------------------+
-                      |
-                      v
-[Mixed Training Graph]
-  A_train_msg = A0_msg* + alpha * A_aug
-  A_train_si  = A0_si   + alpha * A_aug
-                      |
-                      v
-[Dual Scalar Edge Integration]
-  edge_attr -> (f_msg, f_si)
-  A*_msg = A_train_msg ⊙ f_msg
-  A*_si  = A_train_si  ⊙ f_si
-  edge_reg = lambda * regularize(log f)
-                      |
-                      v
-[V31 Assignment Core]
-  ass0 = softmax(W * logmap0(z))
-  struct trunk: -dist(q_i, k_j)
-  calibrated residual: graph_alpha * reliability * edge_residual
-  score = trunk + gamma * residual
-  att  = softmax_j(score) on A*_msg
-  S    = gumbel_softmax(log(att @ ass0))
-                      |
-                      v
-[Hierarchical Coarsening + Final Loss]
-  X_parent = S^T X_current
-  A_parent = S^T A_current S
-  objective = SI-loss(on A*_si hierarchy) + edge_reg
-```
+For the full experimental trail from `Baseline -> B31 -> B40 -> B45 -> B47/B48`, see `deep-research-report.md`.
 ## Dataset Guide (Type, Location, Commands)
 
 All data is expected under repo-local `data/` (default `--root_path data`).
@@ -430,61 +298,20 @@ python3 tools/prepare_mechanism_synth_datasets.py \
   --data_seeds 0
 ```
 
-## Historical controlled benchmark (G20 / G15 era)
+## Historical notes
 
-### Full controlled benchmark (108 runs)
+Earlier `G20/G15` control experiments are kept for reference only:
 
-Source: `results/benchmark_mechanism_synth_full_v1/summary_by_condition.csv`
+- `results/benchmark_mechanism_synth_full_v1/summary_by_condition.csv`
+- `results/benchmark_mechanism_synth_full_v1/stat_tests_summary.json`
+- `results/benchmark_mechanism_permEA_v1/permutation_effect_summary.csv`
 
-| Condition | Runs | NMI mean | ARI mean | SI-loss mean | Conductance(w) mean |
-|---|---:|---:|---:|---:|---:|
-| `g20_se_consistent_main` | 36 | 0.2148 | 0.1881 | 9.6686 | 0.8074 |
-| `g15_echf_main` | 36 | 0.1501 | 0.1421 | 9.7700 | 0.8323 |
-| `baseline_v1` | 36 | 0.1302 | 0.1252 | 9.7922 | 0.8442 |
+They document how the project moved from:
 
-### Historical paired test (G20 vs G15)
+- `G15`: assignment-side calibrated residual
+- `G20`: SE-consistent scalar edge weighting
 
-Source: `results/benchmark_mechanism_synth_full_v1/stat_tests_summary.json`
-
-- Mean `dNMI = +0.0647` (95% CI `[+0.0435, +0.0862]`)
-- Mean `dARI = +0.0459` (95% CI `[+0.0211, +0.0711]`)
-- NMI win rate `94.44%`, ARI win rate `86.11%` over paired `(dataset, seed)` runs
-
-### Historical regime-level observation
-
-Source: `results/benchmark_mechanism_synth_full_v1/regime_summary.csv`
-
-- G20 gain increases strongly with higher homophily and moderate/high edge-signal.
-- G15 improves over baseline but with smaller margin and weaker regime separation.
-- For low-homophily + low-signal settings, gains are small for all methods (expected).
-
-## Historical permutation auxiliary experiment
-
-### Design
-
-Goal: verify whether models use edge-attribute semantics rather than only topology.
-
-For each selected dataset:
-
-1. Keep `edge_index`, `edge_weight`, node features, labels unchanged.
-2. Randomly permute `edge_attr` across edges (`permEA` variant).
-3. Re-run model and compare original vs permuted performance.
-
-Result folder: `results/benchmark_mechanism_permEA_v1`
-
-### Result summary
-
-Source: `results/benchmark_mechanism_permEA_v1/permutation_effect_summary.csv`
-
-| Condition | Pairs | NMI (orig) | NMI (perm) | NMI drop (perm-orig) | ARI (orig) | ARI (perm) | ARI drop (perm-orig) |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| `g15_echf_main` | 6 | 0.1548 | 0.1518 | -0.0030 | 0.1537 | 0.1514 | -0.0023 |
-| `g20_se_consistent_main` | 6 | 0.2315 | 0.1528 | -0.0788 | 0.2025 | 0.1230 | -0.0795 |
-
-Interpretation:
-
-- G20 is much more sensitive to edge-attribute semantic destruction, which is consistent with its design (edge info enters SE graph measure directly).
-- G15 also uses edge attributes, but more conservatively.
+to the current `B45` message-aware mainline.
 
 ## Repro commands
 
