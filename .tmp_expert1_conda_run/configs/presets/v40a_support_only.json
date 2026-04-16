@@ -1,0 +1,19 @@
+{
+  "edge_variant": "V40",
+  "edge_fusion_gamma": 0.0,
+  "edge_attr_fusion_scale": 0.7,
+  "edge_attr_hierarchical": true,
+  "edge_attr_pool_topk": 1,
+  "edge_attr_pool_confidence": false,
+  "edge_msg_conditioned": false,
+  "edge_state_hidden_dim": 128,
+  "edge_state_temp": 1.0,
+  "edge_state_support_floor": 0.15,
+  "edge_state_support_lambda": 1.0,
+  "edge_state_boundary_lambda": 0.0,
+  "edge_state_conf_lambda": 0.005,
+  "edge_state_balance_lambda": 0.001,
+  "edge_state_detach_context": true,
+  "edge_state_use_context": true,
+  "edge_attr_hidden_dim": 64
+}

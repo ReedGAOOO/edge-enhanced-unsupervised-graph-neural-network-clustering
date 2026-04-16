@@ -44,6 +44,8 @@ PRESET_MAP = {
     "b46_v31_msgcond_confgate": "configs/presets/b46_v31_msgcond_confgate.json",
     "b47_v31_msgcond_gs050_matchonly": "configs/presets/b47_v31_msgcond_gs050_matchonly.json",
     "b48_v31_msgcond_gs050_confgate": "configs/presets/b48_v31_msgcond_gs050_confgate.json",
+    "v40_edge_state_ctx": "configs/presets/v40_edge_state_ctx.json",
+    "v40_edge_state_noctx": "configs/presets/v40_edge_state_noctx.json",
     "b30_dualscalar": "configs/presets/b30_dualscalar.json",
     "b31_dualscalar_assign": "configs/presets/b31_dualscalar_assign.json",
     "b32_dualscalar_assign_hier": "configs/presets/b32_dualscalar_assign_hier.json",
@@ -189,6 +191,12 @@ def main() -> None:
         str(preset.get("edge_aug_prior_scale", 0.0)),
         "--edge_aug_prior_mode",
         str(preset.get("edge_aug_prior_mode", "raw")),
+        "--edge_state_temp",
+        str(preset.get("edge_state_temp", 1.0)),
+        "--edge_state_lambda_boundary",
+        str(preset.get("edge_state_lambda_boundary", 0.1)),
+        "--edge_state_lambda_support",
+        str(preset.get("edge_state_lambda_support", 0.1)),
     ]
 
     if preset.get("edge_fusion_gamma_start", None) is not None:
@@ -209,6 +217,8 @@ def main() -> None:
         cmd.append("--edge_attr_pool_confidence")
     if bool(preset.get("append_generic_edge_attr", False)):
         cmd.append("--append_generic_edge_attr")
+    if bool(preset.get("edge_state_use_context", False)):
+        cmd.append("--edge_state_use_context")
 
     print("CMD:")
     print(" ".join(cmd))

@@ -288,6 +288,32 @@ class LorentzAssignment(nn.Module):
             self.last_reliability_mean = float(reliability.detach().mean().cpu().item())
             self.last_mix_beta = 0.0
             score = score + float(self.edge_fusion_gamma) * graph_alpha * reliability * edge_log
+        elif self.edge_variant == 'V40' and bool(use_edge_attr) and edge_attr is not None:
+            if edge_attr.dim() == 1:
+                edge_attr = edge_attr.unsqueeze(1)
+            if edge_attr.shape[0] == edge_value.shape[0] and edge_attr.shape[1] >= 3:
+                state = torch.nan_to_num(
+                    edge_attr[:, :3].to(dtype=score.dtype, device=score.device),
+                    nan=0.0,
+                    posinf=0.0,
+                    neginf=0.0,
+                ).clamp_min(0.0)
+                state = state / state.sum(dim=1, keepdim=True).clamp_min(1e-6)
+                support = state[:, 0]
+                boundary = state[:, 1]
+                neutral = state[:, 2]
+                reliability = (1.0 - neutral).clamp(0.0, 1.0)
+                graph_alpha = self._graph_alpha(reliability, fallback_dtype=score.dtype, fallback_device=score.device)
+                attr_term = reliability * (support - boundary)
+                attr_term = (attr_term - attr_term.mean()) / attr_term.std(unbiased=False).clamp_min(1e-6)
+                score = score + float(self.edge_fusion_gamma) * self.edge_attr_fusion_scale * graph_alpha * attr_term
+                self.last_graph_alpha = float(graph_alpha.detach().cpu().item())
+                self.last_reliability_mean = float(reliability.detach().mean().cpu().item())
+                self.last_mix_beta = float(boundary.detach().mean().cpu().item())
+            else:
+                self.last_graph_alpha = 1.0
+                self.last_reliability_mean = 1.0
+                self.last_mix_beta = 0.0
         elif self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13', 'V31', 'V32', 'V33'} and bool(use_edge_attr) and edge_attr is not None:
             if edge_attr.dim() == 1:
                 edge_attr = edge_attr.unsqueeze(1)

@@ -1,0 +1,2 @@
+scope,delta_nmi_g15_minus_g17,delta_ari_g15_minus_g17,delta_acc_g15_minus_g17,delta_si_loss_g15_minus_g17,delta_modularity_g15_minus_g17,delta_conductance_g15_minus_g17,delta_runtime_sec_g15_minus_g17
+overall_mean,0.000445818307097,9.1759326398e-05,0.000425915945169,0.058935715602,0.000642452747203,-0.000555228728514,12.5676868604

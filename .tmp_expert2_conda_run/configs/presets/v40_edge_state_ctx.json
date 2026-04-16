@@ -1,0 +1,12 @@
+{
+  "edge_variant": "V40",
+  "edge_fusion_gamma": 1.0,
+  "edge_attr_hidden_dim": 64,
+  "edge_attr_fusion_scale": 1.0,
+  "edge_attr_hierarchical": true,
+  "edge_attr_pool_topk": 1,
+  "edge_state_temp": 1.0,
+  "edge_state_lambda_boundary": 0.1,
+  "edge_state_lambda_support": 0.1,
+  "edge_state_use_context": true
+}

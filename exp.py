@@ -44,6 +44,7 @@ class Exp:
             "diag_assign_live": float("nan"),
             "diag_hier_live": float("nan"),
             "diag_aug_live": float("nan"),
+            "diag_role_live": float("nan"),
             "diag_factor_shift": float("nan"),
             "diag_dual_gap": float("nan"),
             "diag_msg_gate_shift": float("nan"),
@@ -121,6 +122,23 @@ class Exp:
             required += 1
             dead += int(aug_live < 0.5)
 
+        if variant == "V40":
+            support_mean = float(edge_stats.get("edge_state_support_mean", 1.0 / 3.0))
+            boundary_mean = float(edge_stats.get("edge_state_boundary_mean", 1.0 / 3.0))
+            neutral_mean = float(edge_stats.get("edge_state_neutral_mean", 1.0 / 3.0))
+            entropy_mean = float(edge_stats.get("edge_state_entropy_mean", 1.0))
+            boundary_loss = float(edge_stats.get("edge_state_boundary_loss", 0.0))
+            role_live = float(
+                (support_mean > 0.10)
+                and (boundary_mean > 0.05)
+                and (neutral_mean > 0.05)
+                and (entropy_mean < 0.98)
+                and (boundary_loss > 1e-4)
+            )
+            diag["diag_role_live"] = role_live
+            required += 1
+            dead += int(role_live < 0.5)
+
         diag["diag_dead_branch_count"] = float(dead)
         diag["diag_required_branch_count"] = float(required)
         diag["diag_all_required_live"] = float(dead == 0) if required > 0 else 1.0
@@ -130,9 +148,10 @@ class Exp:
         logger = create_logger(self.configs.log_path)
         device = self.device
         data = load_data(self.configs).to(device)
-        edge_attr_dim = 1
+        raw_edge_attr_dim = 1
         if hasattr(data, "edge_attr") and data.edge_attr is not None and data.edge_attr.dim() == 2:
-            edge_attr_dim = int(data.edge_attr.shape[1])
+            raw_edge_attr_dim = int(data.edge_attr.shape[1])
+        edge_attr_dim = 3 if str(getattr(self.configs, "edge_variant", "V1")).upper() == "V40" else raw_edge_attr_dim
 
         if hasattr(data, "y") and data.y is not None and data.y.numel() > 0:
             known_ratio = float((data.y >= 0).float().mean().item())
@@ -164,6 +183,7 @@ class Exp:
                 edge_attr_hidden_dim=int(getattr(self.configs, "edge_attr_hidden_dim", 64)),
                 edge_attr_fusion_scale=float(getattr(self.configs, "edge_attr_fusion_scale", 1.0)),
                 edge_attr_dim=edge_attr_dim,
+                raw_edge_attr_dim=raw_edge_attr_dim,
                 edge_attr_hierarchical=bool(getattr(self.configs, "edge_attr_hierarchical", False)),
                 edge_attr_pool_topk=int(getattr(self.configs, "edge_attr_pool_topk", 1)),
                 edge_msg_conditioned=bool(getattr(self.configs, "edge_msg_conditioned", False)),
@@ -179,6 +199,10 @@ class Exp:
                 edge_weight_learn_apply_to=str(getattr(self.configs, "edge_weight_learn_apply_to", "both")),
                 edge_aug_prior_scale=float(getattr(self.configs, "edge_aug_prior_scale", 0.0)),
                 edge_aug_prior_mode=str(getattr(self.configs, "edge_aug_prior_mode", "raw")),
+                edge_state_temp=float(getattr(self.configs, "edge_state_temp", 1.0)),
+                edge_state_lambda_boundary=float(getattr(self.configs, "edge_state_lambda_boundary", 0.1)),
+                edge_state_lambda_support=float(getattr(self.configs, "edge_state_lambda_support", 0.1)),
+                edge_state_use_context=bool(getattr(self.configs, "edge_state_use_context", False)),
                 knn_mode=str(getattr(self.configs, "knn_mode", "auto")),
                 knn_auto_threshold=int(getattr(self.configs, "knn_auto_threshold", 20000)),
             ).to(device)
@@ -220,6 +244,12 @@ class Exp:
         edge_aug_stats = self._mean_std([s.get("final_edge_aug_bias_mean", float("nan")) for s in run_stats])
         edge_aug_std_stats = self._mean_std([s.get("final_edge_aug_bias_std", float("nan")) for s in run_stats])
         edge_reg_stats = self._mean_std([s.get("final_edge_reg", float("nan")) for s in run_stats])
+        edge_state_support_stats = self._mean_std([s.get("final_edge_state_support_mean", float("nan")) for s in run_stats])
+        edge_state_boundary_stats = self._mean_std([s.get("final_edge_state_boundary_mean", float("nan")) for s in run_stats])
+        edge_state_neutral_stats = self._mean_std([s.get("final_edge_state_neutral_mean", float("nan")) for s in run_stats])
+        edge_state_entropy_stats = self._mean_std([s.get("final_edge_state_entropy_mean", float("nan")) for s in run_stats])
+        edge_state_support_loss_stats = self._mean_std([s.get("final_edge_state_support_loss", float("nan")) for s in run_stats])
+        edge_state_boundary_loss_stats = self._mean_std([s.get("final_edge_state_boundary_loss", float("nan")) for s in run_stats])
         hier_levels_stats = self._mean_std([s.get("final_hier_edge_levels_active_ratio", float("nan")) for s in run_stats])
         hier_nonzero_stats = self._mean_std([s.get("final_hier_edge_nonzero_ratio", float("nan")) for s in run_stats])
         hier_abs_stats = self._mean_std([s.get("final_hier_edge_mean_abs", float("nan")) for s in run_stats])
@@ -229,6 +259,7 @@ class Exp:
         diag_assign_live_stats = self._mean_std([s.get("diag_assign_live", float("nan")) for s in run_stats])
         diag_hier_live_stats = self._mean_std([s.get("diag_hier_live", float("nan")) for s in run_stats])
         diag_aug_live_stats = self._mean_std([s.get("diag_aug_live", float("nan")) for s in run_stats])
+        diag_role_live_stats = self._mean_std([s.get("diag_role_live", float("nan")) for s in run_stats])
         diag_dead_count_stats = self._mean_std([s.get("diag_dead_branch_count", float("nan")) for s in run_stats])
         diag_all_live_stats = self._mean_std([s.get("diag_all_required_live", float("nan")) for s in run_stats])
 
@@ -270,6 +301,10 @@ class Exp:
             "edge_weight_learn_apply_to": str(getattr(self.configs, "edge_weight_learn_apply_to", "both")),
             "edge_aug_prior_scale": float(getattr(self.configs, "edge_aug_prior_scale", 0.0)),
             "edge_aug_prior_mode": str(getattr(self.configs, "edge_aug_prior_mode", "raw")),
+            "edge_state_temp": float(getattr(self.configs, "edge_state_temp", 1.0)),
+            "edge_state_lambda_boundary": float(getattr(self.configs, "edge_state_lambda_boundary", 0.1)),
+            "edge_state_lambda_support": float(getattr(self.configs, "edge_state_lambda_support", 0.1)),
+            "edge_state_use_context": bool(getattr(self.configs, "edge_state_use_context", False)),
             "edge_attr_weight_blend": float(getattr(self.configs, "edge_attr_weight_blend", 0.0)),
             "edge_attr_weight_temp": float(getattr(self.configs, "edge_attr_weight_temp", 1.0)),
             "edge_attr_weight_apply_to": str(getattr(self.configs, "edge_attr_weight_apply_to", "si_only")),
@@ -330,6 +365,18 @@ class Exp:
             "final_edge_aug_bias_sigma_std": edge_aug_std_stats["std"],
             "final_edge_reg_mean": edge_reg_stats["mean"],
             "final_edge_reg_std": edge_reg_stats["std"],
+            "final_edge_state_support_mean": edge_state_support_stats["mean"],
+            "final_edge_state_support_std": edge_state_support_stats["std"],
+            "final_edge_state_boundary_mean": edge_state_boundary_stats["mean"],
+            "final_edge_state_boundary_std": edge_state_boundary_stats["std"],
+            "final_edge_state_neutral_mean": edge_state_neutral_stats["mean"],
+            "final_edge_state_neutral_std": edge_state_neutral_stats["std"],
+            "final_edge_state_entropy_mean": edge_state_entropy_stats["mean"],
+            "final_edge_state_entropy_std": edge_state_entropy_stats["std"],
+            "final_edge_state_support_loss_mean": edge_state_support_loss_stats["mean"],
+            "final_edge_state_support_loss_std": edge_state_support_loss_stats["std"],
+            "final_edge_state_boundary_loss_mean": edge_state_boundary_loss_stats["mean"],
+            "final_edge_state_boundary_loss_std": edge_state_boundary_loss_stats["std"],
             "final_hier_edge_levels_active_ratio_mean": hier_levels_stats["mean"],
             "final_hier_edge_levels_active_ratio_std": hier_levels_stats["std"],
             "final_hier_edge_nonzero_ratio_mean": hier_nonzero_stats["mean"],
@@ -342,6 +389,7 @@ class Exp:
             "diag_assign_live_mean": diag_assign_live_stats["mean"],
             "diag_hier_live_mean": diag_hier_live_stats["mean"],
             "diag_aug_live_mean": diag_aug_live_stats["mean"],
+            "diag_role_live_mean": diag_role_live_stats["mean"],
             "diag_dead_branch_count_mean": diag_dead_count_stats["mean"],
             "diag_dead_branch_count_std": diag_dead_count_stats["std"],
             "diag_all_required_live_mean": diag_all_live_stats["mean"],
@@ -566,6 +614,9 @@ class Exp:
                 msg_gate = adaptive_stats.get("msg_gate_factor_mean", 1.0)
                 edge_aug_prior = adaptive_stats.get("edge_aug_bias_mean", 0.0)
                 hier_ratio = adaptive_stats.get("hier_edge_nonzero_ratio", 0.0)
+                state_support = adaptive_stats.get("edge_state_support_mean", 1.0 / 3.0)
+                state_boundary = adaptive_stats.get("edge_state_boundary_mean", 1.0 / 3.0)
+                state_neutral = adaptive_stats.get("edge_state_neutral_mean", 1.0 / 3.0)
                 logger.info(
                     f"[Stage2] Epoch {epoch}: loss={loss_value:.4f}, edge_fusion_gamma={curr_gamma:.4f}, "
                     f"graph_alpha={adaptive_stats['graph_alpha_mean']:.4f}, "
@@ -573,7 +624,8 @@ class Exp:
                     f"edge_mix={adaptive_stats.get('edge_mix_beta_mean', 0.0):.4f}, "
                     f"edge_factor={edge_factor:.4f}, msg/si={edge_factor_msg:.4f}/{edge_factor_si:.4f}, "
                     f"msg_gate={msg_gate:.4f}, edge_aug={edge_aug_prior:.4f}, "
-                    f"edge_reg={edge_reg:.6f}, hier_nonzero={hier_ratio:.4f}"
+                    f"edge_reg={edge_reg:.6f}, hier_nonzero={hier_ratio:.4f}, "
+                    f"state(s/b/n)={state_support:.3f}/{state_boundary:.3f}/{state_neutral:.3f}"
                 )
 
             if (epoch % eval_freq == 0) or (epoch == epochs):
@@ -624,6 +676,14 @@ class Exp:
             "hier_edge_nonzero_ratio": 0.0,
             "hier_edge_mean_abs": 0.0,
             "edge_reg": 0.0,
+            "edge_state_support_mean": 1.0 / 3.0,
+            "edge_state_boundary_mean": 1.0 / 3.0,
+            "edge_state_neutral_mean": 1.0 / 3.0,
+            "edge_state_entropy_mean": 1.0,
+            "edge_state_support_loss": 0.0,
+            "edge_state_boundary_loss": 0.0,
+            "edge_state_support_same_mean": 0.0,
+            "edge_state_boundary_same_mean": 0.0,
         }
         branch_diag = self._edge_branch_diagnostics(edge_stats)
 
@@ -651,6 +711,7 @@ class Exp:
             f"assign={branch_diag.get('diag_assign_live', float('nan'))}, "
             f"hier={branch_diag.get('diag_hier_live', float('nan'))}, "
             f"aug={branch_diag.get('diag_aug_live', float('nan'))}, "
+            f"role={branch_diag.get('diag_role_live', float('nan'))}, "
             f"dead={branch_diag.get('diag_dead_branch_count', 0.0)}/"
             f"{branch_diag.get('diag_required_branch_count', 0.0)}"
         )
@@ -687,12 +748,21 @@ class Exp:
             "final_hier_edge_nonzero_ratio": float(edge_stats.get("hier_edge_nonzero_ratio", 0.0)),
             "final_hier_edge_mean_abs": float(edge_stats.get("hier_edge_mean_abs", 0.0)),
             "final_edge_reg": float(edge_stats.get("edge_reg", 0.0)),
+            "final_edge_state_support_mean": float(edge_stats.get("edge_state_support_mean", 1.0 / 3.0)),
+            "final_edge_state_boundary_mean": float(edge_stats.get("edge_state_boundary_mean", 1.0 / 3.0)),
+            "final_edge_state_neutral_mean": float(edge_stats.get("edge_state_neutral_mean", 1.0 / 3.0)),
+            "final_edge_state_entropy_mean": float(edge_stats.get("edge_state_entropy_mean", 1.0)),
+            "final_edge_state_support_loss": float(edge_stats.get("edge_state_support_loss", 0.0)),
+            "final_edge_state_boundary_loss": float(edge_stats.get("edge_state_boundary_loss", 0.0)),
+            "final_edge_state_support_same_mean": float(edge_stats.get("edge_state_support_same_mean", 0.0)),
+            "final_edge_state_boundary_same_mean": float(edge_stats.get("edge_state_boundary_same_mean", 0.0)),
             "diag_factor_live": float(branch_diag.get("diag_factor_live", float("nan"))),
             "diag_dual_live": float(branch_diag.get("diag_dual_live", float("nan"))),
             "diag_msg_live": float(branch_diag.get("diag_msg_live", float("nan"))),
             "diag_assign_live": float(branch_diag.get("diag_assign_live", float("nan"))),
             "diag_hier_live": float(branch_diag.get("diag_hier_live", float("nan"))),
             "diag_aug_live": float(branch_diag.get("diag_aug_live", float("nan"))),
+            "diag_role_live": float(branch_diag.get("diag_role_live", float("nan"))),
             "diag_dead_branch_count": float(branch_diag.get("diag_dead_branch_count", 0.0)),
             "diag_required_branch_count": float(branch_diag.get("diag_required_branch_count", 0.0)),
             "diag_all_required_live": float(branch_diag.get("diag_all_required_live", 1.0)),

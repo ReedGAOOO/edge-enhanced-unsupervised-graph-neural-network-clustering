@@ -1,0 +1,7 @@
+name: urbanity
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python==3.9
+prefix: /Users/winston/miniconda3/envs/urbanity

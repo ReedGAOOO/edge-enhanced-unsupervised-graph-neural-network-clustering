@@ -1,0 +1,16 @@
+{
+  "edge_variant": "V40",
+  "edge_fusion_gamma": 1.0,
+  "edge_attr_fusion_scale": 1.0,
+  "edge_attr_hierarchical": true,
+  "edge_attr_pool_topk": 3,
+  "edge_attr_pool_confidence": true,
+  "edge_msg_conditioned": true,
+  "edge_msg_matched_only": true,
+  "edge_msg_gate_scale": 0.25,
+  "edge_relation_channels": 4,
+  "edge_relation_hidden_dim": 64,
+  "edge_relation_assign_scale": 1.0,
+  "edge_relation_reg_lambda": 0.001,
+  "edge_attr_hidden_dim": 64
+}

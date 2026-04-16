@@ -1,0 +1,15 @@
+0d96ee1f3194f315  CURRENT_MAINLINE_CORE_MERGED.py
+3d746bfa3139f2cc  EXPERT_BRIEF_model_status_zh.md
+a5477d833cc4b3ac  MANIFEST.txt
+2ad65918a7d70a74  README.md
+e3b0c44298fc1c14  SHA256SUMS.txt
+dcd990d690ddeb97  current_code/dsi.py
+f9453cd49009091c  current_code/exp.py
+8b81ba34486280ca  current_code/layers.py
+16f8ff7c246933c1  current_code/main.py
+15c8134bbf9d7c33  current_code/model.py
+21660366f48eaf5b  current_code/run_preset.py
+c375c571dd5be5c1  presets/b45_v31_msgcond_gs050.json
+baf00d0b84f5549c  presets/baseline_v1.json
+17a4f17b95b218c0  presets/g20_se_consistent_main.json
+a495e27db452927d  reference/REFERENCE_DSE_original_merged.py

@@ -1,0 +1,8 @@
+0d96ee1f3194f315  CURRENT_MAINLINE_FULL_MERGED.py
+3d746bfa3139f2cc  EXPERT_BRIEF_model_status_zh.md
+60ca0e29395487a0  PRESETS_MERGED.jsonc
+8f75c71af7acf2f2  README.md
+2ad65918a7d70a74  README_original_bundle.md
+e3b0c44298fc1c14  SHA256SUMS.txt
+fa4088260c332525  SHA256SUMS_original_bundle.txt
+a495e27db452927d  reference/REFERENCE_DSE_original_merged.py

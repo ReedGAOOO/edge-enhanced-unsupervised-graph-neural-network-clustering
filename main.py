@@ -54,7 +54,7 @@ parser.add_argument('--knn_mode', type=str, default='auto', choices=['auto', 'de
 parser.add_argument('--knn_auto_threshold', type=int, default=20000,
                     help='When knn_mode=auto and num_nodes exceeds this threshold, switch to edge mode.')
 parser.add_argument("--epsInt", type=int, default=8)
-parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20', 'V30', 'V31', 'V32', 'V33'],
+parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20', 'V30', 'V31', 'V32', 'V33', 'V40'],
                     help='V1: plain adjacency; V2: structural pre-weight; '
                          'V3: feature-similarity pre-weight; V4: hybrid pre-weight; '
                          'V5: hybrid + attention-stage edge fusion; '
@@ -66,7 +66,8 @@ parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2
                          'V30: dual message/SI edge scalarization; '
                          'V31: V30 + assignment residual; '
                          'V32: V31 + hierarchical edge-state pooling; '
-                         'V33: V32 + edge-aware augment prior.')
+                         'V33: V32 + edge-aware augment prior; '
+                         'V40: context-conditioned support/boundary/neutral edge-state modeling.')
 parser.add_argument('--edge_hybrid_alpha', type=float, default=0.5,
                     help='Feature weight in hybrid edge variant V4/V5.')
 parser.add_argument('--edge_feat_temp', type=float, default=1.0,
@@ -133,6 +134,14 @@ parser.add_argument('--edge_aug_prior_scale', type=float, default=0.0,
                     help='For V33: additive scale of edge-attr prior on augment-graph candidate scores.')
 parser.add_argument('--edge_aug_prior_mode', type=str, default='raw', choices=['raw', 'positive', 'tanh'],
                     help='For V33: transform mode for augment prior head before adding to candidate scores.')
+parser.add_argument('--edge_state_temp', type=float, default=1.0,
+                    help='For V40: temperature applied before edge-state softmax.')
+parser.add_argument('--edge_state_lambda_boundary', type=float, default=0.1,
+                    help='For V40: weight for boundary-edge same-cluster penalty.')
+parser.add_argument('--edge_state_lambda_support', type=float, default=0.1,
+                    help='For V40: weight for support-edge split penalty.')
+parser.add_argument('--edge_state_use_context', action='store_true',
+                    help='For V40: condition edge-state prediction on endpoint node context in addition to edge_attr.')
 parser.add_argument('--known_only_eval', action='store_true',
                     help='For datasets with explicit unknown label mapping, remap unknown labels to -1 during evaluation.')
 parser.add_argument('--train_log_interval', type=int, default=1,

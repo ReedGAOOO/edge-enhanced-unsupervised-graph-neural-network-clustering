@@ -18,6 +18,7 @@ class DSI(nn.Module):
                  edge_adaptive_alpha_bias=0.0, edge_reliability_temp=1.0,
                  edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0,
                  edge_attr_dim=1,
+                 raw_edge_attr_dim=1,
                  edge_attr_hierarchical=False,
                  edge_attr_pool_topk=1,
                  edge_msg_conditioned=False,
@@ -33,6 +34,10 @@ class DSI(nn.Module):
                  edge_weight_learn_apply_to='both',
                  edge_aug_prior_scale=0.0,
                  edge_aug_prior_mode='raw',
+                 edge_state_temp=1.0,
+                 edge_state_lambda_boundary=0.1,
+                 edge_state_lambda_support=0.1,
+                 edge_state_use_context=False,
                  knn_mode='auto', knn_auto_threshold=20000):
         super(DSI, self).__init__()
         self.num_nodes = num_nodes
@@ -74,10 +79,15 @@ class DSI(nn.Module):
         self.edge_variant = str(edge_variant).upper()
         self.knn_mode = str(knn_mode).lower()
         self.knn_auto_threshold = int(knn_auto_threshold)
+        self.raw_edge_attr_dim = int(max(1, raw_edge_attr_dim))
         self.edge_weight_learn_reg_lambda = float(max(0.0, edge_weight_learn_reg_lambda))
         self.edge_weight_learn_logclip = float(max(1e-3, edge_weight_learn_logclip))
         self.edge_weight_learn_temp = float(max(1e-3, edge_weight_learn_temp))
         self.edge_weight_learn_apply_to = str(edge_weight_learn_apply_to).lower()
+        self.edge_state_temp = float(max(1e-3, edge_state_temp))
+        self.edge_state_lambda_boundary = float(max(0.0, edge_state_lambda_boundary))
+        self.edge_state_lambda_support = float(max(0.0, edge_state_lambda_support))
+        self.edge_state_use_context = bool(edge_state_use_context)
         if self.edge_weight_learn_apply_to not in {'si_only', 'both'}:
             self.edge_weight_learn_apply_to = 'both'
         self.edge_aug_prior_scale = float(edge_aug_prior_scale)
@@ -94,6 +104,14 @@ class DSI(nn.Module):
         self.last_edge_aug_bias_mean = 0.0
         self.last_edge_aug_bias_std = 0.0
         self.last_edge_reg = 0.0
+        self.last_edge_state_support_mean = 1.0 / 3.0
+        self.last_edge_state_boundary_mean = 1.0 / 3.0
+        self.last_edge_state_neutral_mean = 1.0 / 3.0
+        self.last_edge_state_entropy_mean = 1.0
+        self.last_edge_state_support_loss = 0.0
+        self.last_edge_state_boundary_loss = 0.0
+        self.last_edge_state_support_same_mean = 0.0
+        self.last_edge_state_boundary_same_mean = 0.0
 
         if self._use_learnable_edge_weight_variant():
             hidden = max(8, int(edge_attr_hidden_dim))
@@ -108,6 +126,20 @@ class DSI(nn.Module):
             )
         else:
             self.edge_weight_mapper = None
+
+        if self._use_edge_state_variant():
+            hidden = max(8, int(edge_attr_hidden_dim))
+            state_in_dim = self.raw_edge_attr_dim + 1
+            if self.edge_state_use_context:
+                state_in_dim += 3 * (int(hid_dim) + 1) + 1
+            self.edge_state_mapper = nn.Sequential(
+                nn.Linear(state_in_dim, hidden),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden, 3),
+            )
+        else:
+            self.edge_state_mapper = None
 
     def set_edge_fusion_gamma(self, gamma: float):
         if hasattr(self.encoder, "set_edge_fusion_gamma"):
@@ -126,39 +158,207 @@ class DSI(nn.Module):
         stats["edge_aug_bias_mean"] = float(self.last_edge_aug_bias_mean)
         stats["edge_aug_bias_std"] = float(self.last_edge_aug_bias_std)
         stats["edge_reg"] = float(self.last_edge_reg)
+        stats["edge_state_support_mean"] = float(self.last_edge_state_support_mean)
+        stats["edge_state_boundary_mean"] = float(self.last_edge_state_boundary_mean)
+        stats["edge_state_neutral_mean"] = float(self.last_edge_state_neutral_mean)
+        stats["edge_state_entropy_mean"] = float(self.last_edge_state_entropy_mean)
+        stats["edge_state_support_loss"] = float(self.last_edge_state_support_loss)
+        stats["edge_state_boundary_loss"] = float(self.last_edge_state_boundary_loss)
+        stats["edge_state_support_same_mean"] = float(self.last_edge_state_support_same_mean)
+        stats["edge_state_boundary_same_mean"] = float(self.last_edge_state_boundary_same_mean)
         return stats
 
+    def _reset_edge_state_stats(self):
+        self.last_edge_state_support_mean = 1.0 / 3.0
+        self.last_edge_state_boundary_mean = 1.0 / 3.0
+        self.last_edge_state_neutral_mean = 1.0 / 3.0
+        self.last_edge_state_entropy_mean = 1.0
+        self.last_edge_state_support_loss = 0.0
+        self.last_edge_state_boundary_loss = 0.0
+        self.last_edge_state_support_same_mean = 0.0
+        self.last_edge_state_boundary_same_mean = 0.0
+
+    def _edge_state_posteriors(self, z_leaf, base_adj, base_edge_attr, target_adj):
+        target = target_adj.coalesce()
+        num_edges = int(target.indices().shape[1])
+        target_attr, matched = self._align_edge_attr_to_adj_with_mask(base_adj, base_edge_attr, target)
+        if target_attr is None:
+            target_attr = torch.zeros(
+                (num_edges, self.raw_edge_attr_dim),
+                dtype=target.values().dtype,
+                device=target.values().device,
+            )
+            matched = torch.zeros(num_edges, dtype=torch.bool, device=target.values().device)
+        else:
+            if target_attr.dim() == 1:
+                target_attr = target_attr.unsqueeze(1)
+            target_attr = torch.nan_to_num(
+                target_attr.to(dtype=target.values().dtype, device=target.values().device),
+                nan=0.0,
+                posinf=0.0,
+                neginf=0.0,
+            )
+            if matched is None:
+                matched = torch.zeros(target_attr.shape[0], dtype=torch.bool, device=target_attr.device)
+            else:
+                matched = matched.to(device=target_attr.device, dtype=torch.bool)
+
+        feat_parts = [target_attr, matched.to(dtype=target_attr.dtype).unsqueeze(1)]
+        if self.edge_state_use_context:
+            def _zscore_cols(x):
+                return (x - x.mean(dim=0, keepdim=True)) / x.std(dim=0, keepdim=True, unbiased=False).clamp_min(1e-6)
+
+            tangent = self.manifold.logmap0(z_leaf).to(dtype=target_attr.dtype, device=target_attr.device)
+            src, dst = target.indices()[0].long(), target.indices()[1].long()
+            hi = _zscore_cols(tangent[src])
+            hj = _zscore_cols(tangent[dst])
+            pair = _zscore_cols(hi * hj)
+            dist = self.manifold.dist(z_leaf[src], z_leaf[dst]).unsqueeze(1).to(dtype=target_attr.dtype, device=target_attr.device)
+            dist = _zscore_cols(dist)
+            feat_parts.extend([hi, hj, pair, dist])
+
+        feat = torch.cat(feat_parts, dim=1)
+        logits = self.edge_state_mapper(feat)
+        q = torch.softmax(logits / float(self.edge_state_temp), dim=-1)
+        q = q / q.sum(dim=1, keepdim=True).clamp_min(1e-6)
+        return q, matched
+
+    def _state_adj_from_posterior(self, target_adj, q, state_idx: int, normalize_for_message: bool):
+        tgt = target_adj.coalesce()
+        state_weight = q[:, state_idx].to(dtype=tgt.values().dtype, device=tgt.values().device)
+        out = torch.sparse_coo_tensor(
+            tgt.indices(),
+            tgt.values() * state_weight,
+            size=tgt.size(),
+            device=tgt.device,
+        ).coalesce()
+        if normalize_for_message:
+            out = self._normalize_sparse_by_degree(out)
+        return out
+
+    def _soft_cluster_probs(self, ass_dict: dict):
+        running = None
+        for k in range(self.height, 1, -1):
+            ass = ass_dict[k]
+            running = ass if running is None else (running @ ass)
+        return running
+
+    def _edge_state_aux_losses(self, ass_dict: dict, support_adj: torch.Tensor, boundary_adj: torch.Tensor):
+        probs = self._soft_cluster_probs(ass_dict)
+        device = support_adj.values().device
+        zero = torch.zeros((), dtype=support_adj.values().dtype, device=device)
+        if probs is None or probs.numel() == 0:
+            return zero, zero, 0.0, 0.0
+
+        def edge_same_stats(adj_role: torch.Tensor):
+            adj_role = adj_role.coalesce()
+            if adj_role.values().numel() == 0:
+                return zero, 0.0
+            src, dst = adj_role.indices()[0].long(), adj_role.indices()[1].long()
+            weight = adj_role.values().clamp_min(0.0)
+            same = (probs[src] * probs[dst]).sum(dim=1).clamp(0.0, 1.0).to(dtype=weight.dtype)
+            mass = weight.sum().clamp_min(1e-6)
+            return (weight * same).sum() / mass, float(((weight * same).sum() / mass).detach().item())
+
+        support_same, support_same_mean = edge_same_stats(support_adj)
+        boundary_same, boundary_same_mean = edge_same_stats(boundary_adj)
+        support_mass = support_adj.values().sum().clamp_min(1e-6)
+        boundary_mass = boundary_adj.values().sum().clamp_min(1e-6)
+        support_loss = (support_adj.values() * (1.0 - (probs[support_adj.indices()[0].long()] * probs[support_adj.indices()[1].long()]).sum(dim=1).clamp(0.0, 1.0).to(dtype=support_adj.values().dtype))).sum() / support_mass if support_adj.values().numel() > 0 else zero
+        boundary_loss = (boundary_adj.values() * (probs[boundary_adj.indices()[0].long()] * probs[boundary_adj.indices()[1].long()]).sum(dim=1).clamp(0.0, 1.0).to(dtype=boundary_adj.values().dtype)).sum() / boundary_mass if boundary_adj.values().numel() > 0 else zero
+        return support_loss, boundary_loss, support_same_mean, boundary_same_mean
+
+    def _apply_v40_graphs(self, data, z_leaf, adj_target_msg, adj_target_si):
+        base_adj_msg = getattr(data, "adj_msg", data.adj)
+        base_adj_si = getattr(data, "adj_si", base_adj_msg)
+        base_edge_attr = getattr(data, "edge_attr", None)
+
+        q_msg, matched_msg = self._edge_state_posteriors(z_leaf, base_adj_msg, base_edge_attr, adj_target_msg)
+        q_si, _ = self._edge_state_posteriors(z_leaf, base_adj_si, base_edge_attr, adj_target_si)
+
+        support_msg = self._state_adj_from_posterior(adj_target_msg, q_msg, state_idx=0, normalize_for_message=True)
+        support_si = self._state_adj_from_posterior(adj_target_si, q_si, state_idx=0, normalize_for_message=False)
+        boundary_si = self._state_adj_from_posterior(adj_target_si, q_si, state_idx=1, normalize_for_message=False)
+
+        q_stats = q_msg.detach()
+        entropy = -(q_stats * q_stats.clamp_min(EPS).log()).sum(dim=1) / torch.log(q_stats.new_tensor(3.0))
+        self.last_edge_state_support_mean = float(q_stats[:, 0].mean().item())
+        self.last_edge_state_boundary_mean = float(q_stats[:, 1].mean().item())
+        self.last_edge_state_neutral_mean = float(q_stats[:, 2].mean().item())
+        self.last_edge_state_entropy_mean = float(entropy.mean().item())
+        return support_msg, support_si, boundary_si, q_msg, matched_msg
+
     def forward(self, data):
+        self._reset_edge_state_stats()
         features = data.x
         adj = getattr(data, "adj_msg", data.adj).clone()
+        base_edge_attr = getattr(data, "edge_attr", None)
         if self._use_learnable_edge_weight_variant():
             head = 'msg' if self._use_dual_edge_weight_variant() else 'shared'
             adj, _ = self._apply_learned_edge_weight_to_adj(
                 base_adj=getattr(data, "adj_msg", data.adj),
                 target_adj=adj,
-                base_edge_attr=getattr(data, "edge_attr", None),
+                base_edge_attr=base_edge_attr,
                 normalize_for_message=True,
                 head=head,
             )
+        if self._use_edge_state_variant():
+            z_leaf = self.encoder.embed_leaf(data.x, getattr(data, "adj_msg", data.adj))
+            z_leaf = self.lorentz_proj(z_leaf)
+            adj, _, _, edge_attr, edge_mask = self._apply_v40_graphs(
+                data,
+                z_leaf=z_leaf,
+                adj_target_msg=adj,
+                adj_target_si=getattr(data, "adj_si", getattr(data, "adj_msg", data.adj)).clone(),
+            )
+            tree_coord_dict, ass_dict, adj_dict = self.encoder(
+                features, adj, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=True
+            )
+            return tree_coord_dict, ass_dict, adj_dict
         use_edge_attr = self._use_edge_attr_variant()
-        edge_attr = getattr(data, "edge_attr", None) if use_edge_attr else None
+        edge_attr = base_edge_attr if use_edge_attr else None
         tree_coord_dict, ass_dict, adj_dict = self.encoder(features, adj, edge_attr=edge_attr, edge_mask=None, use_edge_attr=use_edge_attr)
         return tree_coord_dict, ass_dict, adj_dict
 
     def get_cluster_results(self, data):
+        self._reset_edge_state_stats()
         features = data.x
         adj = getattr(data, "adj_msg", data.adj).clone()
+        base_edge_attr = getattr(data, "edge_attr", None)
         if self._use_learnable_edge_weight_variant():
             head = 'msg' if self._use_dual_edge_weight_variant() else 'shared'
             adj, _ = self._apply_learned_edge_weight_to_adj(
                 base_adj=getattr(data, "adj_msg", data.adj),
                 target_adj=adj,
-                base_edge_attr=getattr(data, "edge_attr", None),
+                base_edge_attr=base_edge_attr,
                 normalize_for_message=True,
                 head=head,
             )
+        if self._use_edge_state_variant():
+            z_leaf = self.encoder.embed_leaf(data.x, getattr(data, "adj_msg", data.adj))
+            z_leaf = self.lorentz_proj(z_leaf)
+            adj, _, _, edge_attr, edge_mask = self._apply_v40_graphs(
+                data,
+                z_leaf=z_leaf,
+                adj_target_msg=adj,
+                adj_target_si=getattr(data, "adj_si", getattr(data, "adj_msg", data.adj)).clone(),
+            )
+            coord_dict, ass_dict, _ = self.encoder(features, adj, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=True)
+            embed_dict = {}
+            for height, x in coord_dict.items():
+                embed_dict[height] = x.detach()
+            clu_mat_dict = {}
+            running = None
+            for k in range(self.height - 1, 0, -1):
+                ass = ass_dict[k + 1]
+                running = ass if running is None else (running @ ass)
+                idx = running.max(1)[1]
+                t = torch.zeros_like(running)
+                t[torch.arange(t.shape[0], device=t.device), idx] = 1.
+                clu_mat_dict[k] = t
+            return embed_dict, clu_mat_dict
         use_edge_attr = self._use_edge_attr_variant()
-        edge_attr = getattr(data, "edge_attr", None) if use_edge_attr else None
+        edge_attr = base_edge_attr if use_edge_attr else None
         coord_dict, ass_dict, _ = self.encoder(features, adj, edge_attr=edge_attr, edge_mask=None, use_edge_attr=use_edge_attr)
         embed_dict = {}
         for height, x in coord_dict.items():
@@ -196,6 +396,7 @@ class DSI(nn.Module):
 
     def se_loss(self, data, eps=1e-6):
         self.last_edge_reg = 0.0
+        self._reset_edge_state_stats()
         adj_base_msg = getattr(data, "adj_msg", data.adj).clone()
         adj_base_si = getattr(data, "adj_si", adj_base_msg).clone()
         base_edge_attr = getattr(data, "edge_attr", None)
@@ -279,14 +480,44 @@ class DSI(nn.Module):
         use_edge_attr = self._use_edge_attr_variant()
         edge_attr = None
         edge_mask = None
-        if use_edge_attr:
+        if self._use_edge_state_variant():
+            support_msg, support_si, boundary_si, edge_attr, edge_mask = self._apply_v40_graphs(
+                data,
+                z_leaf=z_leaf,
+                adj_target_msg=adj_train_msg,
+                adj_target_si=adj_train_si,
+            )
+            _, ass_aug_dict, _ = self.encoder(
+                data.x, support_msg, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=True
+            )
+            adj_si_dict = self._build_hierarchy_adj_from_assign(support_si, ass_aug_dict)
+            loss = self._si_loss(ass_aug_dict, adj_si_dict, eps)
+            support_aux, boundary_aux, support_same_mean, boundary_same_mean = self._edge_state_aux_losses(
+                ass_aug_dict, support_si, boundary_si
+            )
+            self.last_edge_state_support_loss = float(support_aux.detach().item())
+            self.last_edge_state_boundary_loss = float(boundary_aux.detach().item())
+            self.last_edge_state_support_same_mean = float(support_same_mean)
+            self.last_edge_state_boundary_same_mean = float(boundary_same_mean)
+            loss = (
+                loss
+                + float(self.edge_state_lambda_support) * support_aux
+                + float(self.edge_state_lambda_boundary) * boundary_aux
+            )
+        elif use_edge_attr:
             edge_attr_base = getattr(data, "edge_attr", None)
             edge_attr, edge_mask = self._align_edge_attr_to_adj_with_mask(adj_base_msg, edge_attr_base, adj_train_msg)
-        _, ass_aug_dict, _ = self.encoder(
-            data.x, adj_train_msg, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=use_edge_attr
-        )
-        adj_si_dict = self._build_hierarchy_adj_from_assign(adj_train_si, ass_aug_dict)
-        loss = self._si_loss(ass_aug_dict, adj_si_dict, eps)
+            _, ass_aug_dict, _ = self.encoder(
+                data.x, adj_train_msg, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=use_edge_attr
+            )
+            adj_si_dict = self._build_hierarchy_adj_from_assign(adj_train_si, ass_aug_dict)
+            loss = self._si_loss(ass_aug_dict, adj_si_dict, eps)
+        else:
+            _, ass_aug_dict, _ = self.encoder(
+                data.x, adj_train_msg, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=use_edge_attr
+            )
+            adj_si_dict = self._build_hierarchy_adj_from_assign(adj_train_si, ass_aug_dict)
+            loss = self._si_loss(ass_aug_dict, adj_si_dict, eps)
         if self._use_learnable_edge_weight_variant() and self.edge_weight_learn_reg_lambda > 0.0:
             edge_reg = self.edge_weight_learn_reg_lambda * edge_reg_raw
             self.last_edge_reg = float(edge_reg.detach().item())
@@ -294,7 +525,10 @@ class DSI(nn.Module):
         return loss
 
     def _use_edge_attr_variant(self) -> bool:
-        return self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13', 'V31', 'V32', 'V33'}
+        return self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13', 'V31', 'V32', 'V33', 'V40'}
+
+    def _use_edge_state_variant(self) -> bool:
+        return self.edge_variant in {'V40'}
 
     def _use_learnable_edge_weight_variant(self) -> bool:
         return self.edge_variant in {'V20', 'V30', 'V31', 'V32', 'V33'}
