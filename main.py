@@ -3,6 +3,7 @@ import numpy as np
 import os
 import random
 import argparse
+from pathlib import Path
 from exp import Exp
 from logger import create_logger
 import json
@@ -179,23 +180,19 @@ set_seed(configs.seed, deterministic=configs.deterministic)
 # configs = DotDict(configs_dict)
 # f.close()
 
-log_path = f"./results/{configs.version}/{configs.dataset}.log"
-configs.log_path = log_path
-if not os.path.exists('./checkpoints'):
-    os.mkdir('./checkpoints')
-if not os.path.exists(f"./results"):
-    os.mkdir("./results")
-if not os.path.exists(f"./results/{configs.dataset}"):
-    os.mkdir(f"./results/{configs.dataset}")
-if not os.path.exists(f"./results/{configs.version}"):
-    os.mkdir(f"./results/{configs.version}")
+checkpoints_dir = Path("./checkpoints")
+results_dir = Path("./results") / configs.version
+checkpoints_dir.mkdir(parents=True, exist_ok=True)
+results_dir.mkdir(parents=True, exist_ok=True)
+log_path = results_dir / f"{configs.dataset}.log"
+configs.log_path = str(log_path)
 print(f"Log path: {configs.log_path}")
 logger = create_logger(configs.log_path)
 logger.info(configs)
 
 exp = Exp(configs)
 metrics = exp.train()
-metrics_path = f"./results/{configs.version}/{configs.dataset}_metrics.json"
+metrics_path = results_dir / f"{configs.dataset}_metrics.json"
 with open(metrics_path, "w", encoding="utf-8") as f:
     json.dump(metrics, f, indent=2)
 logger.info(f"Saved metrics to {metrics_path}")

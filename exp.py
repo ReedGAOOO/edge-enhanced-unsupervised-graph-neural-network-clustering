@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
@@ -573,7 +574,8 @@ class Exp:
         best_epoch = 0
         best_gamma = self._edge_fusion_gamma_for_epoch(1)
         no_improve = 0
-        checkpoint_path = f"./checkpoints/{self.configs.save_path}"
+        checkpoint_path = Path("./checkpoints") / self.configs.save_path
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
         for epoch in range(1, epochs + 1):
             model.train()

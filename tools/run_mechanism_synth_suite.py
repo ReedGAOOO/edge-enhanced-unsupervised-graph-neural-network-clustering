@@ -16,15 +16,12 @@ import pandas as pd
 
 PRESET_MAP = {
     "baseline_v1": "configs/presets/baseline_v1.json",
-    "g15_echf_main": "configs/presets/g15_echf_main.json",
-    "g13_edge_lorentz_l1": "configs/presets/g13_edge_lorentz_l1.json",
-    "g13_edge_lorentz_l2": "configs/presets/g13_edge_lorentz_l2.json",
-    "g13_edge_lorentz_noadapt": "configs/presets/g13_edge_lorentz_noadapt.json",
-    "g20_se_consistent_main": "configs/presets/g20_se_consistent_main.json",
-    "b30_dualscalar": "configs/presets/b30_dualscalar.json",
     "b31_dualscalar_assign": "configs/presets/b31_dualscalar_assign.json",
-    "b32_dualscalar_assign_hier": "configs/presets/b32_dualscalar_assign_hier.json",
-    "b33_dualscalar_assign_hier_aug": "configs/presets/b33_dualscalar_assign_hier_aug.json",
+    "g20_se_consistent_main": "configs/presets/g20_se_consistent_main.json",
+    "b40_v31_msgcond": "configs/presets/b40_v31_msgcond.json",
+    "b45_v31_msgcond_gs050": "configs/presets/b45_v31_msgcond_gs050.json",
+    "b47_v31_msgcond_gs050_matchonly": "configs/presets/b47_v31_msgcond_gs050_matchonly.json",
+    "b48_v31_msgcond_gs050_confgate": "configs/presets/b48_v31_msgcond_gs050_confgate.json",
 }
 
 
@@ -392,12 +389,12 @@ def write_report(out_dir: Path, summary: pd.DataFrame, by_regime: pd.DataFrame, 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run synthetic mechanism-validation suite (baseline vs V12 vs V20).")
+    parser = argparse.ArgumentParser(description="Run synthetic mechanism-validation suite for the current active mainline family.")
     parser.add_argument("--tag", type=str, default="benchmark_mechanism_synth_v1")
     parser.add_argument("--root_path", type=str, default="data")
     parser.add_argument("--prefix", type=str, default="synth_mech")
     parser.add_argument("--datasets", type=str, default="", help="Optional dataset list, comma-separated.")
-    parser.add_argument("--conditions", type=str, default="baseline_v1,g15_echf_main,g20_se_consistent_main")
+    parser.add_argument("--conditions", type=str, default="baseline_v1,g20_se_consistent_main,b45_v31_msgcond_gs050")
     parser.add_argument("--baseline_condition", type=str, default="baseline_v1")
     parser.add_argument("--seeds", type=str, default="0,1,2")
     parser.add_argument("--epochs", type=int, default=180)
@@ -414,10 +411,12 @@ def main() -> None:
 
     repo_root = Path(__file__).resolve().parents[1]
     data_root = repo_root / args.root_path
-    out_dir = repo_root / "results" / args.tag
+    out_dir = repo_root / "results" / "mainline_evidence" / args.tag
+    raw_runs_root = repo_root / "results" / "mainline_evidence" / "raw_runs" / args.tag
     logs_dir = out_dir / "logs"
     out_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
+    raw_runs_root.mkdir(parents=True, exist_ok=True)
 
     if args.datasets.strip():
         datasets = parse_list(args.datasets)
@@ -441,7 +440,7 @@ def main() -> None:
         for seed in seeds:
             for cond in conditions:
                 done += 1
-                version = f"{args.tag}_{cond}_{dataset}_s{seed}"
+                version = f"mainline_evidence/raw_runs/{args.tag}/{cond}_{dataset}_s{seed}"
                 metrics_path = repo_root / "results" / version / f"{dataset}_metrics.json"
                 log_path = logs_dir / f"{version}.log"
                 cmd = build_cmd(

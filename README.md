@@ -11,6 +11,7 @@ Unsupervised graph clustering built on DSE/LSEnet, with edge-aware variants cent
 - Baseline: `V1` (`baseline_v1`)
 
 `tools/run_preset.py` now defaults to `b45_v31_msgcond_gs050`.
+`configs/presets/` now keeps only the active top-level presets; older branch presets live under `archive/configs/historical_presets/` and can still be loaded by explicit path.
 
 `B45` is the current mainline because it changes the baseline at the three highest-leverage points without rewriting the structural-entropy objective itself: it keeps the original scalar SE loss, adds dual scalar edge weights for `adj_msg/adj_si`, preserves the calibrated `V31` assignment residual, and further introduces edge-conditioned message passing at the leaf encoder so that `edge_attr` can directly reshape the message graph before the partition tree is grown. Compared with the baseline, this is the first version in the repo that uses edge information simultaneously in representation learning, assignment, and SE-consistent structure weighting while still staying numerically stable through bounded gates, graph re-normalization, and the unchanged `_si_loss()` trunk.
 
@@ -118,9 +119,9 @@ Parallel reference branch:
 ### Current evidence
 
 Source:
-- `results/diagnostic_b45_confirm_grid9_v1/summary_by_condition.csv`
-- `results/diagnostic_b45_confirm_grid9_v1/summary_by_condition_dataset.csv`
-- `results/diagnostic_b47b48_repr3_v1/summary_by_condition.csv`
+- `results/mainline_evidence/diagnostic_b45_confirm_grid9_v1/summary_by_condition.csv`
+- `results/mainline_evidence/diagnostic_b45_confirm_grid9_v1/summary_by_condition_dataset.csv`
+- `results/mainline_evidence/diagnostic_b47b48_repr3_v1/summary_by_condition.csv`
 
 `9-grid × 3 seeds` overall `NMI / ARI`:
 
@@ -216,10 +217,10 @@ The April 16, 2026 comparison used:
 
 Local result artifacts from this run are stored under:
 
-- `archive/workspaces/ep_compare_run/results/ep_compare_v1/dataset_catalog.csv`
-- `archive/workspaces/ep_compare_run/results/ep_compare_v1/summary_by_dataset_model.csv`
-- `archive/workspaces/ep_compare_run/results/ep_compare_v1/summary_by_group_model.csv`
-- `archive/workspaces/ep_compare_run/results/ep_compare_v1/leaderboard_by_dataset.csv`
+- `results/mainline_evidence/ep_compare_v1/dataset_catalog.csv`
+- `results/mainline_evidence/ep_compare_v1/summary_by_dataset_model.csv`
+- `results/mainline_evidence/ep_compare_v1/summary_by_group_model.csv`
+- `results/mainline_evidence/ep_compare_v1/leaderboard_by_dataset.csv`
 
 ### Group-level summary (`NMI mean`)
 
@@ -284,19 +285,11 @@ These run directly and are downloaded by PyG loaders when missing:
 python3 tools/run_preset.py --dataset cora --seed 0 --gpu 0
 ```
 
-### 2) Raw-source datasets that need conversion first
+### 2) Current active construction scripts
 
-Place raw files in the indicated folder, then run conversion:
+The active top-level `tools/` surface now keeps only the builders that still matter for the current mainline and current data-construction series.
 
-1. PyG Entities (`AIFB/MUTAG/BGS/AM`)
-- raw: auto-downloaded by script
-- output: `data/entities_*`
-
-```bash
-python3 tools/prepare_pyg_entities_datasets.py --root data --out_root data --datasets AIFB,MUTAG,BGS,AM
-```
-
-2. PyG DBLP (MAGNN-style author graph)
+1. PyG DBLP (MAGNN-style author graph)
 - raw: auto-downloaded by script
 - output: `data/dblp_magnn_author` or `data/dblp_magnn_author_v2`
 
@@ -304,37 +297,11 @@ python3 tools/prepare_pyg_entities_datasets.py --root data --out_root data --dat
 python3 tools/prepare_pyg_dblp_magnn_dataset.py --root data/pyg_dblp --out_root data --name dblp_magnn_author_v2 --mode v2
 ```
 
-3. Fraud Amazon/Yelp
-- raw expected: `data/FraudAmazon/Amazon.mat`, `data/FraudYelp/YelpChi.mat`
-- output: `data/fraud_amazon_union`, `data/fraud_yelp_homo`
-
-```bash
-python3 tools/prepare_fraud_datasets.py --out_root data --datasets amazon,yelp --base_mode auto
-```
-
-4. Bitcoin WSN
-- raw expected: CSVs under `data/Bitcoin_WSN/data-wsn/`
-- output: `data/bitcoin_wsn_*`
-
-```bash
-python3 tools/prepare_bitcoin_wsn_datasets.py --src_dir data/Bitcoin_WSN/data-wsn --out_root data --datasets otc,alpha,rfa,wikisigned,epinion
-```
-
-5. Urban plot graph
+2. Urban plot graph
 - raw expected: `data/urban_network_datasets/<city>/...`
-- output: `data/urban_<city>_plot`, `data/urban_<city>_plot_v2`, or `data/urban_<city>_plot_v3*`
+- output: `data/urban_<city>_plot_v3*`
 
 ```bash
-# legacy graph builder
-python3 tools/prepare_urban_plot_graph.py --city beijing --urban_root data/urban_network_datasets --out_root data --dataset_name urban_beijing_plot --topk_per_node 32
-
-# recommended v2 graph builder
-# default behavior:
-# - excludes land-use score columns from node features
-# - adds street-junction and feature-KNN edge sources
-# - keeps label files compatible with known-only evaluation
-python3 tools/prepare_urban_plot_graph_v2.py --city beijing --urban_root data/urban_network_datasets --out_root data --dataset_name urban_beijing_plot_v2
-
 # semantics-first V3 graph builders
 # v3s   : shared-street topology only
 # v3sj  : shared-street + shared-junction topology
@@ -345,7 +312,7 @@ python3 tools/prepare_urban_plot_graph_v2.py --city beijing --urban_root data/ur
 python3 tools/prepare_urban_plot_graph_v3.py --city beijing --urban_root data/urban_network_datasets --out_root data --variant v3sjg
 
 # batch-build all cities and all V3 variants
-python3 tools/run_urban_plot_graph_v3_series.py --force --summary_dir results/urban_plot_v3_series
+python3 tools/run_urban_plot_graph_v3_series.py --force --summary_dir results/data_construction_series/urban_plot_v3_series
 
 # refined V3b graph builders
 # edge schema changes:
@@ -356,8 +323,16 @@ python3 tools/run_urban_plot_graph_v3_series.py --force --summary_dir results/ur
 python3 tools/prepare_urban_plot_graph_v3b.py --city beijing --urban_root data/urban_network_datasets --out_root data --variant v3bsjg
 
 # batch-build all cities and all V3b variants
-python3 tools/run_urban_plot_graph_v3b_series.py --force --summary_dir results/urban_plot_v3b_series
+python3 tools/run_urban_plot_graph_v3b_series.py --force --summary_dir results/data_construction_series/urban_plot_v3b_series
 ```
+
+Archived conversion scripts:
+
+- older Entities / Fraud / Bitcoin WSN converters
+- legacy Urban `V1/V2` builders
+- older edge-control dataset helpers
+
+These now live under `archive/code/historical_builders/` and should be used only for backfill or historical reproduction.
 
 ### 3) Custom dataset format (manual placement)
 
@@ -439,6 +414,8 @@ to the current `B45` message-aware mainline.
 Older branch-era reports, exploratory workspaces, and legacy raw results have been moved into top-level `archive/`:
 
 - `archive/docs/`: old reports, expert suggestion drafts, and the earlier `exp/` doc hub
+- `archive/configs/historical_presets/`: legacy preset JSONs that are no longer part of the active top-level preset surface
+- `archive/code/historical_builders/`: legacy dataset-conversion and builder scripts
 - `archive/workspaces/`: temporary or branch-specific experiment workspaces such as the `EP1/EP2` comparison run
 - `archive/results/historical/`: older raw result families from the pre-`B45` or branch-exploration phase
 
@@ -448,9 +425,9 @@ Older branch-era reports, exploratory workspaces, and legacy raw results have be
 
 ```bash
 python3 tools/run_mechanism_synth_suite.py \
-  --tag benchmark_mechanism_synth_full_v1 \
+  --tag current_mechanism_suite_v1 \
   --prefix synth_mech_full_v1 \
-  --conditions baseline_v1,g15_echf_main,g20_se_consistent_main \
+  --conditions baseline_v1,g20_se_consistent_main,b31_dualscalar_assign,b45_v31_msgcond_gs050 \
   --baseline_condition baseline_v1 \
   --seeds 0,1,2 \
   --epochs 80 \
@@ -467,10 +444,10 @@ python3 tools/run_mechanism_synth_suite.py \
 
 ```bash
 python3 tools/run_mechanism_synth_suite.py \
-  --tag benchmark_mechanism_permEA_v1 \
+  --tag current_mechanism_permEA_v1 \
   --datasets synth_mech_full_v1_h85_s90_ds00,synth_mech_full_v1_h85_s90_ds00_permEA,synth_mech_full_v1_h65_s90_ds00,synth_mech_full_v1_h65_s90_ds00_permEA,synth_mech_full_v1_h45_s00_ds00,synth_mech_full_v1_h45_s00_ds00_permEA \
-  --conditions g15_echf_main,g20_se_consistent_main \
-  --baseline_condition g15_echf_main \
+  --conditions g20_se_consistent_main,b45_v31_msgcond_gs050 \
+  --baseline_condition g20_se_consistent_main \
   --seeds 0,1 \
   --epochs 80 \
   --eval_freq 80 \
@@ -481,6 +458,8 @@ python3 tools/run_mechanism_synth_suite.py \
   --amp_bf16 \
   --resume
 ```
+
+By default, current aggregate summaries now live under `results/mainline_evidence/<tag>/`, while raw run outputs are nested under `results/mainline_evidence/raw_runs/`.
 
 ## References
 

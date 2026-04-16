@@ -50,18 +50,22 @@ ENTRY_PREFERENCE = [
 ]
 
 IMPORTANT_RESULTS = [
-    ("Current B45 control-suite summary", Path("results/diagnostic_b45_confirm_grid9_v1/summary_by_condition.csv")),
-    ("Current B45 per-dataset breakdown", Path("results/diagnostic_b45_confirm_grid9_v1/summary_by_condition_dataset.csv")),
-    ("B47/B48 follow-up", Path("results/diagnostic_b47b48_repr3_v1/summary_by_condition.csv")),
-    ("EP1/EP2 comparison by group", Path("archive/workspaces/ep_compare_run/results/ep_compare_v1/summary_by_group_model.csv")),
+    ("Current B45 control-suite summary", Path("results/mainline_evidence/diagnostic_b45_confirm_grid9_v1/summary_by_condition.csv")),
+    ("Current B45 per-dataset breakdown", Path("results/mainline_evidence/diagnostic_b45_confirm_grid9_v1/summary_by_condition_dataset.csv")),
+    ("B47/B48 follow-up", Path("results/mainline_evidence/diagnostic_b47b48_repr3_v1/summary_by_condition.csv")),
+    ("EP1/EP2 comparison by group", Path("results/mainline_evidence/ep_compare_v1/summary_by_group_model.csv")),
+    ("Current Urban V3b series", Path("results/data_construction_series/urban_plot_v3b_series/urban_plot_v3b_summary.csv")),
     ("Archived legacy stage hub", Path("archive/docs/exp/stage_results/README.md")),
 ]
 
 CURATED_AGGREGATES = [
-    ("Current B45 control-suite summary", "results/diagnostic_b45_confirm_grid9_v1/summary_by_condition.csv"),
-    ("Current B45 per-dataset breakdown", "results/diagnostic_b45_confirm_grid9_v1/summary_by_condition_dataset.csv"),
-    ("B47/B48 follow-up", "results/diagnostic_b47b48_repr3_v1/summary_by_condition.csv"),
-    ("Archived EP1/EP2 comparison", "archive/workspaces/ep_compare_run/results/ep_compare_v1/summary_by_group_model.csv"),
+    ("Current B45 control-suite summary", "results/mainline_evidence/diagnostic_b45_confirm_grid9_v1/summary_by_condition.csv"),
+    ("Current B45 per-dataset breakdown", "results/mainline_evidence/diagnostic_b45_confirm_grid9_v1/summary_by_condition_dataset.csv"),
+    ("B47/B48 follow-up", "results/mainline_evidence/diagnostic_b47b48_repr3_v1/summary_by_condition.csv"),
+    ("Current EP1/EP2 comparison", "results/mainline_evidence/ep_compare_v1/summary_by_group_model.csv"),
+    ("Current Urban V3b construction series", "results/data_construction_series/urban_plot_v3b_series/urban_plot_v3b_summary.csv"),
+    ("Current Urban V3 vs V3b comparison", "results/data_construction_series/urban_v3_v3b_compare/summary.csv"),
+    ("Current DBLP construction comparison", "results/data_construction_series/dblp_magnn_integration_v2/v1_vs_v2_model_compare.csv"),
     ("Archived mechanism-control legacy summary", "archive/results/historical/benchmark_mechanism_synth_full_v1/summary_by_condition.csv"),
     ("Archived permutation legacy summary", "archive/results/historical/benchmark_mechanism_permEA_v1/permutation_effect_summary.csv"),
 ]
@@ -308,10 +312,10 @@ def _render_results_readme(
             lines.append(f"- {label}: {_results_readme_link(rel_path.as_posix())}")
     lines.append("")
     lines.append("## What Lives Where")
-    lines.append(f"- `results/`: raw run outputs and aggregate campaign summaries. Aggregate summary dirs: `{len(aggregate)}`.")
+    lines.append(f"- `results/`: active category hubs only. Top-level active dirs: `{len(aggregate)}`.")
+    lines.append("- `results/mainline_evidence/raw_runs/`: nested raw runs produced by current active experiment entrypoints.")
     lines.append(f"- `results/_index/`: machine-readable manifests generated for lookup.")
     lines.append(f"- `archive/docs/exp/stage_results/`: archived stage-level summaries from earlier branches. Stage dirs: `{len(stage_rows)}`.")
-    lines.append(f"- Raw single-run dirs under `results/`: `{sum(int(row['raw_run_count']) for row in raw_family_rows)}` across `{len(raw_family_rows)}` families.")
     other_count = len(other)
     if other_count:
         lines.append(f"- Non-standard or asset dirs under `results/`: `{other_count}`.")
@@ -335,12 +339,13 @@ def _render_results_readme(
     lines.append(f"- Raw run family counts: {_results_readme_link('results/_index/raw_run_families.csv')}")
     lines.append(f"- Scan overview JSON: {_results_readme_link('results/_index/overview.json')}")
     lines.append("")
-    lines.append("## Top Raw Run Families")
-    for row in raw_family_rows[:15]:
-        lines.append(
-            f"- `{row['family']}`: `{row['raw_run_count']}` raw runs. Example: {_results_readme_link(row['example_run_dir'])}"
-        )
-    lines.append("")
+    if raw_family_rows:
+        lines.append("## Top Raw Run Families")
+        for row in raw_family_rows[:15]:
+            lines.append(
+                f"- `{row['family']}`: `{row['raw_run_count']}` raw runs. Example: {_results_readme_link(row['example_run_dir'])}"
+            )
+        lines.append("")
     lines.append("## Notes")
     lines.append("- Early branch-era results were moved into `archive/results/historical/` to keep the repo root focused on the current mainline.")
     lines.append("- If you add new runs later, rebuild this hub with `python3 tools/build_results_index.py`.")

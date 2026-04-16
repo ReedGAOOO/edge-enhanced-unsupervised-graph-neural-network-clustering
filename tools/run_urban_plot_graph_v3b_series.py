@@ -122,7 +122,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Batch-build urban plot graph V3b series.")
     parser.add_argument("--urban_root", type=str, default="data/urban_network_datasets")
     parser.add_argument("--out_root", type=str, default="data")
-    parser.add_argument("--summary_dir", type=str, default="results/urban_plot_v3b_series")
+    parser.add_argument("--summary_dir", type=str, default="results/data_construction_series/urban_plot_v3b_series")
     parser.add_argument("--cities", type=str, default="all", help='Comma-separated list, or "all"')
     parser.add_argument("--variants", type=str, default=",".join(DEFAULT_VARIANTS))
     parser.add_argument("--force", action="store_true")

@@ -25,41 +25,12 @@ DATASET_MAX_NUMS = {
 
 PRESET_MAP = {
     "baseline_v1": "configs/presets/baseline_v1.json",
-    "v5_mid_adaptive_u2": "configs/presets/v5_mid_adaptive_u2.json",
-    "a2_u2_no_adapt": "configs/presets/a2_u2_no_adapt.json",
-    # ECHF family (new canonical names).
-    "b15_echf_branch": "configs/presets/b15_echf_branch.json",
-    "b15_echf_branch_s60": "configs/presets/b15_echf_branch_s60.json",
-    "g15_echf_main": "configs/presets/g15_echf_main.json",
-    "g15_echf_noadapt": "configs/presets/g15_echf_noadapt.json",
-    "g17_v5_temp15": "configs/presets/g17_v5_temp15.json",
-    "g13_edge_lorentz_l1": "configs/presets/g13_edge_lorentz_l1.json",
-    "g13_edge_lorentz_l2": "configs/presets/g13_edge_lorentz_l2.json",
-    "g13_edge_lorentz_noadapt": "configs/presets/g13_edge_lorentz_noadapt.json",
+    "b31_dualscalar_assign": "configs/presets/b31_dualscalar_assign.json",
     "g20_se_consistent_main": "configs/presets/g20_se_consistent_main.json",
     "b40_v31_msgcond": "configs/presets/b40_v31_msgcond.json",
-    "b43_v31_msgcond_matchonly": "configs/presets/b43_v31_msgcond_matchonly.json",
-    "b44_v31_msgcond_gs020": "configs/presets/b44_v31_msgcond_gs020.json",
     "b45_v31_msgcond_gs050": "configs/presets/b45_v31_msgcond_gs050.json",
-    "b46_v31_msgcond_confgate": "configs/presets/b46_v31_msgcond_confgate.json",
     "b47_v31_msgcond_gs050_matchonly": "configs/presets/b47_v31_msgcond_gs050_matchonly.json",
     "b48_v31_msgcond_gs050_confgate": "configs/presets/b48_v31_msgcond_gs050_confgate.json",
-    "v40_edge_state_ctx": "configs/presets/v40_edge_state_ctx.json",
-    "v40_edge_state_noctx": "configs/presets/v40_edge_state_noctx.json",
-    "b30_dualscalar": "configs/presets/b30_dualscalar.json",
-    "b31_dualscalar_assign": "configs/presets/b31_dualscalar_assign.json",
-    "b32_dualscalar_assign_hier": "configs/presets/b32_dualscalar_assign_hier.json",
-    "b33_dualscalar_assign_hier_aug": "configs/presets/b33_dualscalar_assign_hier_aug.json",
-    "b34_v33_augsmall": "configs/presets/b34_v33_augsmall.json",
-    "b35_v33_augpositive": "configs/presets/b35_v33_augpositive.json",
-    "b36_v33_augpositive_small": "configs/presets/b36_v33_augpositive_small.json",
-    "b37_v32_hardhier": "configs/presets/b37_v32_hardhier.json",
-    "b38_v32_topk3": "configs/presets/b38_v32_topk3.json",
-    # Backward-compatible aliases.
-    "b15_pathb_v12_hier": "configs/presets/b15_pathb_v12_hier.json",
-    "g17_temp1p5_mainline": "configs/presets/g17_temp1p5_mainline.json",
-    "g15_default_hetero": "configs/presets/g15_default_hetero.json",
-    "g15_noadapt_hetero": "configs/presets/g15_noadapt_hetero.json",
 }
 
 
@@ -99,6 +70,9 @@ def main() -> None:
         print("Available presets:")
         for k in sorted(PRESET_MAP.keys()):
             print(f"- {k}: {PRESET_MAP[k]}")
+        print("")
+        print("Archived legacy presets can still be loaded by explicit path, e.g.:")
+        print("- archive/configs/historical_presets/g15_echf_main.json")
         return
 
     dataset_key = args.dataset.lower()
@@ -111,10 +85,12 @@ def main() -> None:
 
     preset = load_preset(repo_root, args.preset)
 
+    preset_label = Path(args.preset).stem
+
     if args.version.strip():
         version = args.version.strip()
     else:
-        version = f"{Path(args.preset).stem}_{dataset_key}_s{args.seed}"
+        version = f"mainline_evidence/raw_runs/manual/{preset_label}_{dataset_key}_s{args.seed}"
 
     cmd = [
         sys.executable,
