@@ -12,6 +12,7 @@ Unsupervised graph clustering built on DSE/LSEnet, with edge-aware variants cent
 
 `tools/run_preset.py` now defaults to `b45_v31_msgcond_gs050`.
 `configs/presets/` now keeps only the active top-level presets; older branch presets live under `archive/configs/historical_presets/` and can still be loaded by explicit path.
+Current expert guidance used for ongoing iteration lives under [`Expert suggestion/`](</home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/Expert suggestion/README.md>).
 
 `B45` is the current mainline because it changes the baseline at the three highest-leverage points without rewriting the structural-entropy objective itself: it keeps the original scalar SE loss, adds dual scalar edge weights for `adj_msg/adj_si`, preserves the calibrated `V31` assignment residual, and further introduces edge-conditioned message passing at the leaf encoder so that `edge_attr` can directly reshape the message graph before the partition tree is grown. Compared with the baseline, this is the first version in the repo that uses edge information simultaneously in representation learning, assignment, and SE-consistent structure weighting while still staying numerically stable through bounded gates, graph re-normalization, and the unchanged `_si_loss()` trunk.
 
