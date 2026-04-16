@@ -8,14 +8,20 @@ This folder keeps branch-era material that is no longer part of the active repo 
   - archived reports
   - expert suggestion drafts
   - the older `exp/` / `Exp/` documentation hubs
+- `code/`
+  - historical helper scripts and branch-era experiment drivers
+- `data/historical/`
+  - older dataset variants moved out of the active `data/` surface
+- `checkpoints/root_historical/`
+  - root-level checkpoint files from older campaigns
 - `workspaces/`
   - temporary or branch-specific experiment workspaces
-  - archived `EP1 / EP2` comparison artifacts
+  - archived branch-specific copies and smoke artifacts
 - `results/historical/`
   - older raw result families moved out of the repo root
 
 ## Policy
 
-- Active training code, presets, and current mainline evidence stay at the repo root.
-- Historical branch exploration, obsolete reports, and older raw campaign outputs are moved here.
+- Active training code, presets, current mainline evidence, and current data-construction summaries stay at the repo root.
+- Historical branch exploration, obsolete reports, older raw campaign outputs, and older data variants are moved here.
 - Some archived CSVs may still preserve the original execution paths used when the runs were created.

@@ -20,6 +20,8 @@ checkpoints/
 /data/*
 !/data/README.md
 /data/MetroFlow/
+/archive/data/*
+!/archive/data/README.md
 /Exp/*
 !/Exp/README.md
 
