@@ -171,7 +171,105 @@ B45 / V31 + msg-cond
   -> partition tree -> unchanged scalar SE loss
 ```
 
-For the full experimental trail from `Baseline -> B31 -> B40 -> B45 -> B47/B48`, see `deep-research-report.md`.
+For the full experimental trail from `Baseline -> B31 -> B40 -> B45 -> B47/B48`, see `archive/docs/deep-research-report.md`.
+
+## Recent EP1 / EP2 Evaluation (2026-04-16)
+
+For the most recent expert-driven follow-up, we relabeled the two exploratory branches as:
+
+- `EP1`: the former Expert1 contextual edge-state branch (`V40A` family)
+- `EP2`: the former Expert2 relation-state branch (`B50 / V40 relation-state` family)
+
+These names are evaluation labels for the latest comparison run. They are **not** promoted mainline presets.
+
+### Why this comparison was split by edge-semantic credibility
+
+Not all datasets in this repo carry equally trustworthy edge semantics:
+
+- `highest`: synthetic control graphs where edge semantics are explicitly generated and can be permuted for causal checks
+- `high`: native or natively modeled semantic-edge graphs such as later Urban `V3b` builders and `DBLP v2`
+- `medium`: real relation graphs with partial-label evaluation noise (`AIFB`)
+- `low`: common benchmarks such as `cora/photo` where `edge_attr` is derived from node features and degrees rather than provided natively
+
+This matters because a branch can look acceptable on derived or synthetic edges while still failing to generalize on real contextual relations.
+
+### Evaluation matrix
+
+The April 16, 2026 comparison used:
+
+- synthetic control + permutation pairs:
+  - `synth_mech_full_v1_h85_s90_ds00`
+  - `synth_mech_full_v1_h65_s90_ds00`
+  - `synth_mech_full_v1_h45_s00_ds00`
+  - plus their `permEA` counterparts
+- high-credibility native-modeled urban graphs:
+  - `urban_paris_plot_v3bsjg`
+  - `urban_boston_plot_v3bsjg`
+  - `urban_bangkok_plot_v3bsjg`
+- high-credibility native multi-relation graph:
+  - `dblp_magnn_author_v2`
+- medium-credibility partial-label KG graph:
+  - `entities_aifb`
+- low-credibility derived-edge sanity checks:
+  - `cora`
+  - `photo`
+
+Local result artifacts from this run are stored under:
+
+- `archive/workspaces/ep_compare_run/results/ep_compare_v1/dataset_catalog.csv`
+- `archive/workspaces/ep_compare_run/results/ep_compare_v1/summary_by_dataset_model.csv`
+- `archive/workspaces/ep_compare_run/results/ep_compare_v1/summary_by_group_model.csv`
+- `archive/workspaces/ep_compare_run/results/ep_compare_v1/leaderboard_by_dataset.csv`
+
+### Group-level summary (`NMI mean`)
+
+| Group | Edge semantics | `B45` | `EP1` | `EP2` | Reading |
+|---|---|---:|---:|---:|---|
+| `synthetic_control` | explicit synthetic edge semantics | `0.1309` | `0.0490` | `0.0072` | `B45` remains clearly strongest |
+| `synthetic_control_perm` | synthetic permutation stress | `0.0765` | `0.0493` | `0.0085` | only `B45` shows a large semantic drop |
+| `urban_v3b_native` | later Urban `V3b` native-modeled relations | `0.0146` | `0.0093` | `0.0086` | all branches are weak; `B45` still leads |
+| `native_multirelation` | native bibliographic relations (`DBLP v2`) | `0.1703` | `0.1206` | `0.0028` | `EP1` has partial signal, but not enough |
+| `native_multirelation_partial_label` | native KG relations with noisy clustering eval | `0.0819` | `0.0658` | `0.0802` | not decisive because labels are sparse |
+| `derived_generic` | non-native derived edge features | `0.0830` | `0.0704` | `0.0045` | sanity only; not evidence of semantic generalization |
+
+### Main takeaways
+
+- `B45` remains the only branch with strong evidence that it is actually using edge semantics rather than merely tolerating them.
+- On the highest-signal synthetic condition (`h85`), `B45` still dominates:
+  - `B45 = 0.3781`
+  - `EP1 = 0.1332`
+  - `EP2 = 0.0080`
+- On the paired permutation stress test for the same graph:
+  - `B45` drops from `0.3781` to `0.2146`
+  - `EP1` stays nearly unchanged (`0.1332 -> 0.1342`)
+  - `EP2` stays nearly unchanged (`0.0080 -> 0.0082`)
+
+This pattern is important: the large `B45` drop is evidence that it really depends on edge semantics, whereas the near-flat `EP1/EP2` behavior suggests they still do not stably exploit the edge channel.
+
+- On later Urban `V3b` graphs, all three models remain weak. This is the most important failure case because these are high-credibility, context-sensitive relations rather than synthetic edges.
+- On `DBLP v2`, `EP1` is better than it is on Urban graphs and reaches `0.1206` `NMI`, which suggests that explicit edge-role modeling may have some value on native multi-relation graphs. However, it still trails `B45 = 0.1703` by a clear margin.
+- `EP2` remains unsupported by current evidence. It is weak on synthetic control, weak on Urban `V3b`, and nearly collapsed on `DBLP v2`.
+
+### Current interpretation
+
+The repo's main open problem is still unchanged:
+
+- we know that edge semantics can help
+- we do **not** yet have a branch that is both strongly edge-using and reliably generalizable on real contextual relations
+
+As of the 2026-04-16 evaluation, the practical ordering is:
+
+1. `B45` as the mainline
+2. `EP1` as an exploratory branch worth keeping only for further controlled ablations
+3. `EP2` as an exploratory branch without current promotion evidence
+
+### Notes on excluded / low-priority results
+
+- `fraud_yelp_homo` was not used as a headline result in this comparison:
+  - the task is structurally mismatched with community-style clustering
+  - the rerun also failed to produce valid metrics in this matrix
+- `cora/photo` are kept only as low-credibility sanity checks because their `edge_attr` is derived rather than native
+
 ## Dataset Guide (Type, Location, Commands)
 
 All data is expected under repo-local `data/` (default `--root_path data`).
@@ -323,11 +421,11 @@ python3 tools/prepare_mechanism_synth_datasets.py \
 
 ## Historical notes
 
-Earlier `G20/G15` control experiments are kept for reference only:
+Earlier `G20/G15` control experiments are archived for reference only:
 
-- `results/benchmark_mechanism_synth_full_v1/summary_by_condition.csv`
-- `results/benchmark_mechanism_synth_full_v1/stat_tests_summary.json`
-- `results/benchmark_mechanism_permEA_v1/permutation_effect_summary.csv`
+- `archive/results/historical/benchmark_mechanism_synth_full_v1/summary_by_condition.csv`
+- `archive/results/historical/benchmark_mechanism_synth_full_v1/stat_tests_summary.json`
+- `archive/results/historical/benchmark_mechanism_permEA_v1/permutation_effect_summary.csv`
 
 They document how the project moved from:
 
@@ -335,6 +433,14 @@ They document how the project moved from:
 - `G20`: SE-consistent scalar edge weighting
 
 to the current `B45` message-aware mainline.
+
+## Archive
+
+Older branch-era reports, exploratory workspaces, and legacy raw results have been moved into top-level `archive/`:
+
+- `archive/docs/`: old reports, expert suggestion drafts, and the earlier `exp/` doc hub
+- `archive/workspaces/`: temporary or branch-specific experiment workspaces such as the `EP1/EP2` comparison run
+- `archive/results/historical/`: older raw result families from the pre-`B45` or branch-exploration phase
 
 ## Repro commands
 

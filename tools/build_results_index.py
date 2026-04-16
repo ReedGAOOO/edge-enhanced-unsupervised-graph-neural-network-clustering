@@ -14,7 +14,7 @@ from typing import Dict, Iterable, List, Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = REPO_ROOT / "results"
-STAGE_DIR = REPO_ROOT / "exp" / "stage_results"
+STAGE_DIR = REPO_ROOT / "archive" / "docs" / "exp" / "stage_results"
 INDEX_DIR = RESULTS_DIR / "_index"
 
 AGG_KEY_FILES = {
@@ -50,25 +50,20 @@ ENTRY_PREFERENCE = [
 ]
 
 IMPORTANT_RESULTS = [
-    ("Stage hub", Path("exp/stage_results/README.md")),
-    ("Latest urban full recheck", Path("exp/stage_results/stage13_urban_echf_recheck_e60_s01_full/README.md")),
-    ("Urban recheck raw summary", Path("results/urban_echf_recheck_e60_s01_v1/summary.json")),
-    ("B15 mainline ablation", Path("results/benchmark_b15_mainline_ablation_v1/summary.json")),
-    ("Post-refactor multi-seed smoke", Path("results/benchmark_echf_smoke_v2_s012/summary.json")),
-    ("Urban raw map", Path("results/raw_maps/beijing_raw_overview.png")),
+    ("Current B45 control-suite summary", Path("results/diagnostic_b45_confirm_grid9_v1/summary_by_condition.csv")),
+    ("Current B45 per-dataset breakdown", Path("results/diagnostic_b45_confirm_grid9_v1/summary_by_condition_dataset.csv")),
+    ("B47/B48 follow-up", Path("results/diagnostic_b47b48_repr3_v1/summary_by_condition.csv")),
+    ("EP1/EP2 comparison by group", Path("archive/workspaces/ep_compare_run/results/ep_compare_v1/summary_by_group_model.csv")),
+    ("Archived legacy stage hub", Path("archive/docs/exp/stage_results/README.md")),
 ]
 
 CURATED_AGGREGATES = [
-    ("Core public benchmark path", "results/benchmark_b15_mainline_ablation_v1/summary.json"),
-    ("ECHF smoke checks", "results/benchmark_echf_smoke_v2_s012/summary.json"),
-    ("Urban known-struct E60", "results/urban_known_struct_g15g17_e60_v1/summary.json"),
-    ("Urban full recheck", "results/urban_echf_recheck_e60_s01_v1/summary.json"),
-    ("Urban G15 vs G17 detailed", "results/urban_g15_g17_detailed_v1/summary.json"),
-    ("Mechanism synth full", "results/benchmark_mechanism_synth_full_v1/README.md"),
-    ("Edge-attr controls", "results/benchmark_edgeattr_controls_v1/README.md"),
-    ("KNN mode tradeoff", "results/benchmark_knn_mode_tradeoff_v1/README.md"),
-    ("B30 public screen", "results/benchmark_b30_public_screen_v1/summary_by_condition.csv"),
-    ("Raw city maps", "results/raw_maps/beijing_raw_overview.png"),
+    ("Current B45 control-suite summary", "results/diagnostic_b45_confirm_grid9_v1/summary_by_condition.csv"),
+    ("Current B45 per-dataset breakdown", "results/diagnostic_b45_confirm_grid9_v1/summary_by_condition_dataset.csv"),
+    ("B47/B48 follow-up", "results/diagnostic_b47b48_repr3_v1/summary_by_condition.csv"),
+    ("Archived EP1/EP2 comparison", "archive/workspaces/ep_compare_run/results/ep_compare_v1/summary_by_group_model.csv"),
+    ("Archived mechanism-control legacy summary", "archive/results/historical/benchmark_mechanism_synth_full_v1/summary_by_condition.csv"),
+    ("Archived permutation legacy summary", "archive/results/historical/benchmark_mechanism_permEA_v1/permutation_effect_summary.csv"),
 ]
 
 
@@ -315,7 +310,7 @@ def _render_results_readme(
     lines.append("## What Lives Where")
     lines.append(f"- `results/`: raw run outputs and aggregate campaign summaries. Aggregate summary dirs: `{len(aggregate)}`.")
     lines.append(f"- `results/_index/`: machine-readable manifests generated for lookup.")
-    lines.append(f"- `exp/stage_results/`: curated stage-level summaries. Stage dirs: `{len(stage_rows)}`.")
+    lines.append(f"- `archive/docs/exp/stage_results/`: archived stage-level summaries from earlier branches. Stage dirs: `{len(stage_rows)}`.")
     lines.append(f"- Raw single-run dirs under `results/`: `{sum(int(row['raw_run_count']) for row in raw_family_rows)}` across `{len(raw_family_rows)}` families.")
     other_count = len(other)
     if other_count:
@@ -327,8 +322,8 @@ def _render_results_readme(
         if full.exists():
             lines.append(f"- {label}: {_results_readme_link(rel_path)}")
     lines.append("")
-    lines.append("## Stage Summaries")
-    lines.append(f"- Stage hub: {_results_readme_link('exp/stage_results/README.md')}")
+    lines.append("## Archived Stage Summaries")
+    lines.append(f"- Stage hub: {_results_readme_link('archive/docs/exp/stage_results/README.md')}")
     latest_stage_rows = sorted(stage_rows, key=lambda row: _stage_sort_key(row["stage"]))[-4:]
     for row in latest_stage_rows:
         focus = f" - {row['focus']}" if row["focus"] else ""
@@ -347,7 +342,7 @@ def _render_results_readme(
         )
     lines.append("")
     lines.append("## Notes")
-    lines.append("- I did not move or rename old result folders; the index is non-destructive.")
+    lines.append("- Early branch-era results were moved into `archive/results/historical/` to keep the repo root focused on the current mainline.")
     lines.append("- If you add new runs later, rebuild this hub with `python3 tools/build_results_index.py`.")
     return "\n".join(lines) + "\n"
 

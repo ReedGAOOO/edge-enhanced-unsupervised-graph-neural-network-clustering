@@ -1,0 +1,619 @@
+--- /mnt/data/CURRENT_MAINLINE_CORE_MERGED(3).py
++++ /mnt/data/CURRENT_MAINLINE_CORE_MERGED_V40_local.py
+@@ -73,7 +73,7 @@
+ parser.add_argument('--knn_auto_threshold', type=int, default=20000,
+                     help='When knn_mode=auto and num_nodes exceeds this threshold, switch to edge mode.')
+ parser.add_argument("--epsInt", type=int, default=8)
+-parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20', 'V30', 'V31', 'V32', 'V33'],
++parser.add_argument('--edge_variant', type=str, default='V1', choices=['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V12', 'V13', 'V20', 'V30', 'V31', 'V32', 'V33', 'V40'],
+                     help='V1: plain adjacency; V2: structural pre-weight; '
+                          'V3: feature-similarity pre-weight; V4: hybrid pre-weight; '
+                          'V5: hybrid + attention-stage edge fusion; '
+@@ -85,7 +85,8 @@
+                          'V30: dual message/SI edge scalarization; '
+                          'V31: V30 + assignment residual; '
+                          'V32: V31 + hierarchical edge-state pooling; '
+-                         'V33: V32 + edge-aware augment prior.')
++                         'V33: V32 + edge-aware augment prior; '
++                         'V40: latent relation channels + hierarchical persistence.')
+ parser.add_argument('--edge_hybrid_alpha', type=float, default=0.5,
+                     help='Feature weight in hybrid edge variant V4/V5.')
+ parser.add_argument('--edge_feat_temp', type=float, default=1.0,
+@@ -114,6 +115,14 @@
+                     help='Hidden size for edge-attribute encoder in V6/V7.')
+ parser.add_argument('--edge_attr_fusion_scale', type=float, default=1.0,
+                     help='Fusion scale for edge-attribute terms in V6/V7.')
++parser.add_argument('--edge_relation_channels', type=int, default=4,
++                    help='V40: number of latent relation channels for edge-state modeling.')
++parser.add_argument('--edge_relation_hidden_dim', type=int, default=64,
++                    help='V40: hidden size of the shared relation-state encoder.')
++parser.add_argument('--edge_relation_assign_scale', type=float, default=1.0,
++                    help='V40: scale of relation-aware compatibility term in assignment.')
++parser.add_argument('--edge_relation_reg_lambda', type=float, default=1e-3,
++                    help='V40: regularization strength for relation-state stability.')
+ parser.add_argument('--append_generic_edge_attr', action='store_true',
+                     help='Append generic edge features to provided edge_attr (for custom datasets).')
+ parser.add_argument('--edge_attr_weight_blend', type=float, default=0.0,
+@@ -274,7 +283,7 @@
+         required = 0
+         dead = 0
+ 
+-        if variant in {"V20", "V30", "V31", "V32", "V33"}:
++        if variant in {"V20", "V30", "V31", "V32", "V33", "V40"}:
+             factor_shift = abs(float(edge_stats.get("edge_factor_mean", 1.0)) - 1.0)
+             factor_sigma = abs(float(edge_stats.get("edge_factor_std", 0.0)))
+             edge_reg = abs(float(edge_stats.get("edge_reg", 0.0)))
+@@ -308,7 +317,7 @@
+             required += 1
+             dead += int(msg_live < 0.5)
+ 
+-        if variant in {"V31", "V32", "V33"}:
++        if variant in {"V31", "V32", "V33", "V40"}:
+             graph_alpha = float(edge_stats.get("graph_alpha_mean", 1.0))
+             edge_rel = float(edge_stats.get("edge_reliability_mean", 1.0))
+             edge_mix = float(edge_stats.get("edge_mix_beta_mean", 0.0))
+@@ -321,7 +330,7 @@
+             required += 1
+             dead += int(assign_live < 0.5)
+ 
+-        if variant in {"V32", "V33"} and bool(getattr(self.configs, "edge_attr_hierarchical", False)):
++        if variant in {"V32", "V33", "V40"} and bool(getattr(self.configs, "edge_attr_hierarchical", False)):
+             hier_levels = float(edge_stats.get("hier_edge_levels_active_ratio", 0.0))
+             hier_nonzero = float(edge_stats.get("hier_edge_nonzero_ratio", 0.0))
+             hier_mean_abs = float(edge_stats.get("hier_edge_mean_abs", 0.0))
+@@ -381,6 +390,10 @@
+                 edge_reliability_temp=float(getattr(self.configs, "edge_reliability_temp", 1.0)),
+                 edge_attr_hidden_dim=int(getattr(self.configs, "edge_attr_hidden_dim", 64)),
+                 edge_attr_fusion_scale=float(getattr(self.configs, "edge_attr_fusion_scale", 1.0)),
++                edge_relation_channels=int(getattr(self.configs, "edge_relation_channels", 4)),
++                edge_relation_hidden_dim=int(getattr(self.configs, "edge_relation_hidden_dim", 64)),
++                edge_relation_assign_scale=float(getattr(self.configs, "edge_relation_assign_scale", 1.0)),
++                edge_relation_reg_lambda=float(getattr(self.configs, "edge_relation_reg_lambda", 1e-3)),
+                 edge_attr_dim=edge_attr_dim,
+                 edge_attr_hierarchical=bool(getattr(self.configs, "edge_attr_hierarchical", False)),
+                 edge_attr_pool_topk=int(getattr(self.configs, "edge_attr_pool_topk", 1)),
+@@ -473,6 +486,10 @@
+             "edge_reliability_temp": float(getattr(self.configs, "edge_reliability_temp", 1.0)),
+             "edge_attr_hidden_dim": int(getattr(self.configs, "edge_attr_hidden_dim", 64)),
+             "edge_attr_fusion_scale": float(getattr(self.configs, "edge_attr_fusion_scale", 1.0)),
++            "edge_relation_channels": int(getattr(self.configs, "edge_relation_channels", 4)),
++            "edge_relation_hidden_dim": int(getattr(self.configs, "edge_relation_hidden_dim", 64)),
++            "edge_relation_assign_scale": float(getattr(self.configs, "edge_relation_assign_scale", 1.0)),
++            "edge_relation_reg_lambda": float(getattr(self.configs, "edge_relation_reg_lambda", 1e-3)),
+             "edge_attr_hierarchical": bool(getattr(self.configs, "edge_attr_hierarchical", False)),
+             "edge_attr_pool_topk": int(getattr(self.configs, "edge_attr_pool_topk", 1)),
+             "edge_msg_conditioned": bool(getattr(self.configs, "edge_msg_conditioned", False)),
+@@ -933,8 +950,9 @@
+                  edge_variant='V1', edge_fusion_gamma=1.0, edge_confidence_quantile=0.0,
+                  edge_adaptive_alpha=False, edge_adaptive_alpha_strength=2.0,
+                  edge_adaptive_alpha_bias=0.0, edge_reliability_temp=1.0,
+-                 edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0, edge_attr_dim=1,
+-                 edge_attr_hierarchical=False, edge_attr_pool_topk=1,
++                 edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0,
++                 edge_relation_channels=4, edge_relation_hidden_dim=64, edge_relation_assign_scale=1.0,
++                 edge_attr_dim=1, edge_attr_hierarchical=False, edge_attr_pool_topk=1,
+                  edge_msg_conditioned=False, edge_msg_gate_scale=0.35,
+                  edge_msg_matched_only=False, edge_msg_confidence_gate=False, edge_msg_confidence_temp=1.0,
+                  edge_attr_pool_confidence=False, edge_attr_pool_conf_power=1.0):
+@@ -943,6 +961,8 @@
+         self.manifold = manifold
+         self.max_nums = max_nums  # [N_{H-1}, ..., N_1]
+         self.height = len(max_nums) + 1
++        self.edge_variant = str(edge_variant).upper()
++        self.edge_relation_enabled = self.edge_variant in {'V40'}
+         self.edge_attr_hierarchical = bool(edge_attr_hierarchical)
+         self.edge_attr_pool_topk = max(1, int(edge_attr_pool_topk))
+         self.edge_msg_conditioned = bool(edge_msg_conditioned)
+@@ -957,13 +977,25 @@
+         self.last_hier_edge_mean_abs = 0.0
+         self.last_msg_gate_factor_mean = 1.0
+         self.last_msg_gate_factor_std = 0.0
++        if self.edge_relation_enabled:
++            self.edge_relation_encoder = EdgeRelationStateEncoder(
++                edge_attr_dim=int(max(1, edge_attr_dim)),
++                num_relations=int(edge_relation_channels),
++                hidden_dim=int(edge_relation_hidden_dim),
++                dropout=dropout,
++            )
++            edge_model_attr_dim = int(self.edge_relation_encoder.out_dim)
++        else:
++            self.edge_relation_encoder = None
++            edge_model_attr_dim = int(max(1, edge_attr_dim))
++        self.edge_relation_assign_scale = float(edge_relation_assign_scale)
+ 
+         # Project input to Lorentz space (d+1)
+         self.input_proj = LorentzGraphConvolution(manifold, in_dim + 1, hid_dim + 1,
+                                                   True, dropout, False,
+                                                   select_activation(nonlin_str),
+                                                   edge_conditioned=self.edge_msg_conditioned,
+-                                                  edge_attr_dim=edge_attr_dim,
++                                                  edge_attr_dim=edge_model_attr_dim,
+                                                   edge_attr_hidden_dim=edge_attr_hidden_dim,
+                                                   edge_gate_scale=self.edge_msg_gate_scale,
+                                                   edge_matched_only=self.edge_msg_matched_only,
+@@ -973,7 +1005,7 @@
+                                                   True, dropout, False,
+                                                   select_activation(nonlin_str),
+                                                   edge_conditioned=self.edge_msg_conditioned,
+-                                                  edge_attr_dim=edge_attr_dim,
++                                                  edge_attr_dim=edge_model_attr_dim,
+                                                   edge_attr_hidden_dim=edge_attr_hidden_dim,
+                                                   edge_gate_scale=self.edge_msg_gate_scale,
+                                                   edge_matched_only=self.edge_msg_matched_only,
+@@ -998,7 +1030,10 @@
+                 edge_reliability_temp=edge_reliability_temp,
+                 edge_attr_hidden_dim=edge_attr_hidden_dim,
+                 edge_attr_fusion_scale=edge_attr_fusion_scale,
+-                edge_attr_dim=edge_attr_dim,
++                edge_relation_channels=edge_relation_channels,
++                edge_relation_hidden_dim=edge_relation_hidden_dim,
++                edge_relation_assign_scale=edge_relation_assign_scale,
++                edge_attr_dim=edge_model_attr_dim,
+             ))
+             curr_dim = hid_dim + 1  # parent embedding dim
+ 
+@@ -1046,6 +1081,29 @@
+             "hier_edge_mean_abs": float(self.last_hier_edge_mean_abs),
+         }
+ 
++    def use_edge_relation_state(self) -> bool:
++        return bool(self.edge_relation_enabled and self.edge_relation_encoder is not None)
++
++    def edge_relation_state_dim(self) -> int:
++        if self.edge_relation_encoder is None:
++            return 0
++        return int(self.edge_relation_encoder.out_dim)
++
++    def encode_edge_relation_state(self, edge_attr: torch.Tensor | None, matched: torch.Tensor | None = None) -> torch.Tensor | None:
++        if not self.use_edge_relation_state():
++            return edge_attr
++        return self.edge_relation_encoder.encode(edge_attr, matched=matched)
++
++    def edge_relation_factor_from_state(self, edge_state: torch.Tensor | None, head: str = 'msg') -> torch.Tensor | None:
++        if not self.use_edge_relation_state():
++            return None
++        return self.edge_relation_encoder.factor_from_state(edge_state, head=head)
++
++    def edge_relation_regularization(self, edge_state: torch.Tensor | None, matched: torch.Tensor | None = None) -> torch.Tensor:
++        if not self.use_edge_relation_state():
++            return self.input_proj.linear.weight.weight.new_zeros(())
++        return self.edge_relation_encoder.regularization(edge_state, matched=matched)
++
+     def embed_leaf(self, x, adj, edge_attr=None, edge_mask=None, use_edge_attr=False):
+         # Map raw features to Lorentz leaf embedding
+         o = torch.zeros_like(x[:, :1])                # (N, 1)
+@@ -1291,6 +1349,7 @@
+ 
+ import torch
+ import torch.nn as nn
++import torch.nn.functional as F
+ from torch_scatter import scatter_softmax
+ import math
+ from utils.model_utils import gumbel_softmax, graph_top_K, normalize_adj, givens_rot_mat
+@@ -1368,6 +1427,94 @@
+                 self.weight.weight[:, idx] = 0
+         if self.bias:
+             nn.init.constant_(self.weight.bias, 0)
++
++
++class EdgeRelationStateEncoder(nn.Module):
++    """Encode raw edge_attr into a persistent relation state: [strength, relation_probs]."""
++
++    def __init__(self, edge_attr_dim: int, num_relations: int = 4, hidden_dim: int = 64, dropout: float = 0.0):
++        super().__init__()
++        self.num_relations = max(1, int(num_relations))
++        hidden = max(8, int(hidden_dim))
++        self.out_dim = self.num_relations + 1
++        self.encoder = nn.Sequential(
++            nn.Linear(int(max(1, edge_attr_dim)), hidden),
++            nn.ReLU(),
++            nn.Dropout(dropout),
++            nn.Linear(hidden, self.out_dim),
++        )
++        self.msg_beta = nn.Parameter(torch.zeros(self.num_relations))
++        self.si_beta = nn.Parameter(torch.zeros(self.num_relations))
++
++    def _neutral_state(self, num_edges: int, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
++        strength = torch.ones((num_edges, 1), dtype=dtype, device=device)
++        probs = torch.full(
++            (num_edges, self.num_relations),
++            1.0 / float(self.num_relations),
++            dtype=dtype,
++            device=device,
++        )
++        return torch.cat([strength, probs], dim=1)
++
++    def _normalize_strength(self, strength: torch.Tensor, matched: torch.Tensor | None = None) -> torch.Tensor:
++        if matched is not None and torch.any(matched):
++            ref = strength[matched].detach().mean().clamp_min(1e-4)
++        else:
++            ref = strength.detach().mean().clamp_min(1e-4)
++        return strength / ref
++
++    def encode(self, edge_attr: torch.Tensor | None, matched: torch.Tensor | None = None) -> torch.Tensor | None:
++        if edge_attr is None:
++            return None
++        if edge_attr.dim() == 1:
++            edge_attr = edge_attr.unsqueeze(1)
++        edge_attr = torch.nan_to_num(edge_attr.float(), nan=0.0, posinf=0.0, neginf=0.0)
++        raw = self.encoder(edge_attr)
++        strength = F.softplus(raw[:, :1]) + 1e-6
++        strength = self._normalize_strength(strength, matched=matched)
++        probs = torch.softmax(raw[:, 1:], dim=-1)
++        state = torch.cat([strength, probs], dim=1)
++        if matched is not None:
++            neutral = self._neutral_state(edge_attr.shape[0], dtype=state.dtype, device=state.device)
++            state = torch.where(matched.unsqueeze(1), state, neutral)
++        return state
++
++    def _head_beta(self, head: str) -> torch.Tensor:
++        base = self.msg_beta if str(head).lower() == 'msg' else self.si_beta
++        beta = F.softplus(base) + 1e-4
++        beta = beta / beta.mean().detach().clamp_min(1e-4)
++        return beta
++
++    def factor_from_state(self, edge_state: torch.Tensor | None, head: str = 'msg') -> torch.Tensor | None:
++        if edge_state is None or edge_state.numel() == 0:
++            return None
++        strength = edge_state[:, :1].clamp_min(1e-4)
++        probs = edge_state[:, 1:]
++        beta = self._head_beta(head).to(dtype=probs.dtype, device=probs.device)
++        factor = strength.squeeze(1) * torch.matmul(probs, beta)
++        return factor.clamp_min(1e-4)
++
++    def regularization(self, edge_state: torch.Tensor | None, matched: torch.Tensor | None = None) -> torch.Tensor:
++        if edge_state is None or edge_state.numel() == 0:
++            device = self.msg_beta.device
++            return torch.zeros((), dtype=self.msg_beta.dtype, device=device)
++        if matched is not None and torch.any(matched):
++            state = edge_state[matched]
++        else:
++            state = edge_state
++        strength = state[:, 0]
++        probs = state[:, 1:]
++        strength_reg = ((strength - 1.0) ** 2).mean()
++        beta_msg = self._head_beta('msg')
++        beta_si = self._head_beta('si')
++        beta_reg = ((beta_msg - 1.0) ** 2).mean() + ((beta_si - 1.0) ** 2).mean()
++        if self.num_relations > 1:
++            entropy = -(probs * torch.log(probs.clamp_min(1e-8))).sum(dim=-1)
++            entropy = entropy / math.log(float(self.num_relations))
++            entropy_reg = ((entropy - 0.5) ** 2).mean()
++        else:
++            entropy_reg = strength_reg.new_zeros(())
++        return strength_reg + 0.1 * beta_reg + 0.05 * entropy_reg
+ 
+ 
+ class LorentzAgg(nn.Module):
+@@ -1492,7 +1639,9 @@
+                  edge_fusion_gamma=1.0, edge_confidence_quantile=0.0,
+                  edge_adaptive_alpha=False, edge_adaptive_alpha_strength=2.0,
+                  edge_adaptive_alpha_bias=0.0, edge_reliability_temp=1.0,
+-                 edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0, edge_attr_dim=1):
++                 edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0,
++                 edge_relation_channels=4, edge_relation_hidden_dim=64, edge_relation_assign_scale=1.0,
++                 edge_attr_dim=1):
+         super(LorentzAssignment, self).__init__()
+         self.manifold = manifold
+         self.num_assign = num_assign
+@@ -1504,6 +1653,7 @@
+         self.edge_adaptive_alpha_bias = float(edge_adaptive_alpha_bias)
+         self.edge_reliability_temp = float(max(1e-3, edge_reliability_temp))
+         self.edge_attr_fusion_scale = float(edge_attr_fusion_scale)
++        self.edge_relation_assign_scale = float(edge_relation_assign_scale)
+         self.last_graph_alpha = 1.0
+         self.last_reliability_mean = 1.0
+         self.last_mix_beta = 0.0
+@@ -1525,6 +1675,17 @@
+             nn.Dropout(dropout),
+             nn.Linear(max(8, int(edge_attr_hidden_dim)), max(1, int(hid_dim) - 1)),
+         )
++        if self.edge_variant in {'V40'}:
++            rel_hidden = max(16, int(edge_relation_hidden_dim))
++            pair_dim = 3 * int(hid_dim)
++            self.edge_relation_pair_mlp = nn.Sequential(
++                nn.Linear(pair_dim, rel_hidden),
++                nn.ReLU(),
++                nn.Dropout(dropout),
++                nn.Linear(rel_hidden, int(max(1, edge_relation_channels))),
++            )
++        else:
++            self.edge_relation_pair_mlp = None
+ 
+     def set_edge_fusion_gamma(self, gamma: float):
+         self.edge_fusion_gamma = float(gamma)
+@@ -1563,7 +1724,32 @@
+         src, dst = edge_index[0], edge_index[1]
+         score = self.manifold.dist(q[src], k[dst])
+         score = -score
+-        if self.edge_variant == 'V5':
++        if self.edge_variant == 'V40' and bool(use_edge_attr) and edge_attr is not None:
++            if edge_attr.dim() == 1:
++                edge_attr = edge_attr.unsqueeze(1)
++            if edge_attr.shape[0] == edge_value.shape[0] and edge_attr.shape[1] >= 2 and self.edge_relation_pair_mlp is not None:
++                edge_state = torch.nan_to_num(
++                    edge_attr.to(dtype=score.dtype, device=score.device),
++                    nan=0.0,
++                    posinf=0.0,
++                    neginf=0.0,
++                )
++                edge_strength = edge_state[:, 0].clamp_min(1e-4)
++                rel_prob = edge_state[:, 1:]
++                q_euc = self.manifold.logmap0(q[src])
++                k_euc = self.manifold.logmap0(k[dst])
++                pair_feat = torch.cat([q_euc, k_euc, torch.abs(q_euc - k_euc)], dim=-1)
++                rel_compat = self.edge_relation_pair_mlp(pair_feat)
++                rel_term = torch.tanh((rel_prob * rel_compat).sum(dim=-1))
++                score = score + float(self.edge_fusion_gamma) * self.edge_attr_fusion_scale * self.edge_relation_assign_scale * edge_strength * rel_term
++                self.last_graph_alpha = float(edge_strength.detach().mean().cpu().item())
++                self.last_reliability_mean = float(rel_prob.detach().max(dim=-1).values.mean().cpu().item())
++                self.last_mix_beta = float(rel_prob.detach().mean(dim=0).max().cpu().item())
++            else:
++                self.last_graph_alpha = 1.0
++                self.last_reliability_mean = 1.0
++                self.last_mix_beta = 0.0
++        elif self.edge_variant == 'V5':
+             reliability, edge_log = self._struct_reliability_and_log(edge_value)
+             if self.edge_adaptive_alpha:
+                 with torch.no_grad():
+@@ -1717,7 +1903,9 @@
+                  edge_variant='V1', edge_fusion_gamma=1.0, edge_confidence_quantile=0.0,
+                  edge_adaptive_alpha=False, edge_adaptive_alpha_strength=2.0,
+                  edge_adaptive_alpha_bias=0.0, edge_reliability_temp=1.0,
+-                 edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0, edge_attr_dim=1):
++                 edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0,
++                 edge_relation_channels=4, edge_relation_hidden_dim=64, edge_relation_assign_scale=1.0,
++                 edge_attr_dim=1):
+         super(LSENetLayer, self).__init__()
+         self.manifold = manifold
+         # self.embeder = LorentzGraphConvolution(manifold, in_dim, hid_dim,
+@@ -1734,6 +1922,9 @@
+                                           edge_reliability_temp=edge_reliability_temp,
+                                           edge_attr_hidden_dim=edge_attr_hidden_dim,
+                                           edge_attr_fusion_scale=edge_attr_fusion_scale,
++                                          edge_relation_channels=edge_relation_channels,
++                                          edge_relation_hidden_dim=edge_relation_hidden_dim,
++                                          edge_relation_assign_scale=edge_relation_assign_scale,
+                                           edge_attr_dim=edge_attr_dim)
+ 
+     def forward(self, x, adj, edge_attr=None, use_edge_attr=False):
+@@ -1818,6 +2009,8 @@
+                  edge_adaptive_alpha=False, edge_adaptive_alpha_strength=2.0,
+                  edge_adaptive_alpha_bias=0.0, edge_reliability_temp=1.0,
+                  edge_attr_hidden_dim=64, edge_attr_fusion_scale=1.0,
++                 edge_relation_channels=4, edge_relation_hidden_dim=64, edge_relation_assign_scale=1.0,
++                 edge_relation_reg_lambda=1e-3,
+                  edge_attr_dim=1,
+                  edge_attr_hierarchical=False,
+                  edge_attr_pool_topk=1,
+@@ -1856,6 +2049,9 @@
+             edge_reliability_temp=edge_reliability_temp,
+             edge_attr_hidden_dim=edge_attr_hidden_dim,
+             edge_attr_fusion_scale=edge_attr_fusion_scale,
++            edge_relation_channels=edge_relation_channels,
++            edge_relation_hidden_dim=edge_relation_hidden_dim,
++            edge_relation_assign_scale=edge_relation_assign_scale,
+             edge_attr_dim=edge_attr_dim,
+             edge_attr_hierarchical=bool(edge_attr_hierarchical),
+             edge_attr_pool_topk=int(edge_attr_pool_topk),
+@@ -1882,6 +2078,7 @@
+         if self.edge_weight_learn_apply_to not in {'si_only', 'both'}:
+             self.edge_weight_learn_apply_to = 'both'
+         self.edge_aug_prior_scale = float(edge_aug_prior_scale)
++        self.edge_relation_reg_lambda = float(max(0.0, edge_relation_reg_lambda))
+         self.edge_aug_prior_mode = str(edge_aug_prior_mode).lower()
+         if self.edge_aug_prior_mode not in {'raw', 'positive', 'tanh'}:
+             self.edge_aug_prior_mode = 'raw'
+@@ -1929,6 +2126,15 @@
+         stats["edge_reg"] = float(self.last_edge_reg)
+         return stats
+ 
++    def _encode_relation_state_for_adj(self, base_adj, base_edge_attr, target_adj):
++        if (not self._use_edge_relation_variant()) or base_edge_attr is None:
++            return None, None
++        edge_attr, edge_mask = self._align_edge_attr_to_adj_with_mask(base_adj, base_edge_attr, target_adj)
++        if edge_attr is None:
++            return None, edge_mask
++        edge_state = self.encoder.encode_edge_relation_state(edge_attr, matched=edge_mask)
++        return edge_state, edge_mask
++
+     def forward(self, data):
+         features = data.x
+         adj = getattr(data, "adj_msg", data.adj).clone()
+@@ -1943,7 +2149,11 @@
+             )
+         use_edge_attr = self._use_edge_attr_variant()
+         edge_attr = getattr(data, "edge_attr", None) if use_edge_attr else None
+-        tree_coord_dict, ass_dict, adj_dict = self.encoder(features, adj, edge_attr=edge_attr, edge_mask=None, use_edge_attr=use_edge_attr)
++        edge_mask = None
++        if use_edge_attr and self._use_edge_relation_variant():
++            edge_attr, edge_mask = self._encode_relation_state_for_adj(getattr(data, "adj_msg", data.adj), edge_attr, adj)
++            adj = self._apply_relation_state_to_adj(adj, edge_attr, normalize_for_message=True, head='msg')
++        tree_coord_dict, ass_dict, adj_dict = self.encoder(features, adj, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=use_edge_attr)
+         return tree_coord_dict, ass_dict, adj_dict
+ 
+     def get_cluster_results(self, data):
+@@ -1960,7 +2170,11 @@
+             )
+         use_edge_attr = self._use_edge_attr_variant()
+         edge_attr = getattr(data, "edge_attr", None) if use_edge_attr else None
+-        coord_dict, ass_dict, _ = self.encoder(features, adj, edge_attr=edge_attr, edge_mask=None, use_edge_attr=use_edge_attr)
++        edge_mask = None
++        if use_edge_attr and self._use_edge_relation_variant():
++            edge_attr, edge_mask = self._encode_relation_state_for_adj(getattr(data, "adj_msg", data.adj), edge_attr, adj)
++            adj = self._apply_relation_state_to_adj(adj, edge_attr, normalize_for_message=True, head='msg')
++        coord_dict, ass_dict, _ = self.encoder(features, adj, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=use_edge_attr)
+         embed_dict = {}
+         for height, x in coord_dict.items():
+             embed_dict[height] = x.detach()
+@@ -2007,21 +2221,29 @@
+         if self._use_edge_knn_mode(data.x.shape[0]):
+             # For large-graph edge mode, stop gradient through adjacency construction.
+             with torch.no_grad():
++                leaf_edge_attr = base_edge_attr if self._use_edge_attr_variant() else None
++                leaf_edge_mask = None
++                if self._use_edge_relation_variant():
++                    leaf_edge_attr, leaf_edge_mask = self._encode_relation_state_for_adj(adj_base_msg, base_edge_attr, adj_base_msg)
+                 z_leaf = self.encoder.embed_leaf(
+                     data.x,
+                     adj_base_msg,
+-                    edge_attr=base_edge_attr if self._use_edge_attr_variant() else None,
+-                    edge_mask=None,
++                    edge_attr=leaf_edge_attr,
++                    edge_mask=leaf_edge_mask,
+                     use_edge_attr=self._use_edge_attr_variant(),
+                 )
+                 z_leaf = self.lorentz_proj(z_leaf)
+                 adj_aug = self._edge_candidate_adj(z_leaf, adj_base_msg, self.knn, edge_bias=aug_prior_bias)
+         else:
++            leaf_edge_attr = base_edge_attr if self._use_edge_attr_variant() else None
++            leaf_edge_mask = None
++            if self._use_edge_relation_variant():
++                leaf_edge_attr, leaf_edge_mask = self._encode_relation_state_for_adj(adj_base_msg, base_edge_attr, adj_base_msg)
+             z_leaf = self.encoder.embed_leaf(
+                 data.x,
+                 adj_base_msg,
+-                edge_attr=base_edge_attr if self._use_edge_attr_variant() else None,
+-                edge_mask=None,
++                edge_attr=leaf_edge_attr,
++                edge_mask=leaf_edge_mask,
+                 use_edge_attr=self._use_edge_attr_variant(),
+             )
+             z_leaf = self.lorentz_proj(z_leaf)
+@@ -2080,22 +2302,36 @@
+         use_edge_attr = self._use_edge_attr_variant()
+         edge_attr = None
+         edge_mask = None
++        edge_state_si = None
++        edge_mask_si = None
+         if use_edge_attr:
+             edge_attr_base = getattr(data, "edge_attr", None)
+-            edge_attr, edge_mask = self._align_edge_attr_to_adj_with_mask(adj_base_msg, edge_attr_base, adj_train_msg)
++            if self._use_edge_relation_variant():
++                edge_attr, edge_mask = self._encode_relation_state_for_adj(adj_base_msg, edge_attr_base, adj_train_msg)
++                adj_train_msg = self._apply_relation_state_to_adj(adj_train_msg, edge_attr, normalize_for_message=True, head='msg')
++                edge_state_si, edge_mask_si = self._encode_relation_state_for_adj(adj_base_si, edge_attr_base, adj_train_si)
++            else:
++                edge_attr, edge_mask = self._align_edge_attr_to_adj_with_mask(adj_base_msg, edge_attr_base, adj_train_msg)
+         _, ass_aug_dict, _ = self.encoder(
+             data.x, adj_train_msg, edge_attr=edge_attr, edge_mask=edge_mask, use_edge_attr=use_edge_attr
+         )
+-        adj_si_dict = self._build_hierarchy_adj_from_assign(adj_train_si, ass_aug_dict)
++        if self._use_edge_relation_variant() and edge_state_si is not None:
++            adj_si_dict = self._build_relation_hierarchy_adj_from_assign(adj_train_si, edge_state_si, ass_aug_dict)
++        else:
++            adj_si_dict = self._build_hierarchy_adj_from_assign(adj_train_si, ass_aug_dict)
+         loss = self._si_loss(ass_aug_dict, adj_si_dict, eps)
+         if self._use_learnable_edge_weight_variant() and self.edge_weight_learn_reg_lambda > 0.0:
+             edge_reg = self.edge_weight_learn_reg_lambda * edge_reg_raw
+             self.last_edge_reg = float(edge_reg.detach().item())
+             loss = loss + edge_reg
++        if self._use_edge_relation_variant() and self.edge_relation_reg_lambda > 0.0 and edge_attr is not None:
++            rel_reg = self.edge_relation_reg_lambda * self.encoder.edge_relation_regularization(edge_attr, matched=edge_mask)
++            self.last_edge_reg = float(self.last_edge_reg + rel_reg.detach().item())
++            loss = loss + rel_reg
+         return loss
+ 
+     def _use_edge_attr_variant(self) -> bool:
+-        return self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13', 'V31', 'V32', 'V33'}
++        return self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13', 'V31', 'V32', 'V33', 'V40'}
+ 
+     def _use_learnable_edge_weight_variant(self) -> bool:
+         return self.edge_variant in {'V20', 'V30', 'V31', 'V32', 'V33'}
+@@ -2105,6 +2341,42 @@
+ 
+     def _use_edge_aug_prior_variant(self) -> bool:
+         return self.edge_variant in {'V33'}
++
++    def _use_edge_relation_variant(self) -> bool:
++        return self.edge_variant in {'V40'}
++
++    def _update_relation_factor_stats(self, factor: torch.Tensor | None, head: str) -> None:
++        if factor is None or factor.numel() == 0:
++            return
++        mean = float(factor.detach().mean().item())
++        std = float(factor.detach().std(unbiased=False).item())
++        if str(head).lower() == 'msg':
++            self.last_edge_factor_msg_mean = mean
++            self.last_edge_factor_msg_std = std
++        elif str(head).lower() == 'si':
++            self.last_edge_factor_si_mean = mean
++            self.last_edge_factor_si_std = std
++        vals = [self.last_edge_factor_msg_mean, self.last_edge_factor_si_mean]
++        self.last_edge_factor_mean = float(sum(vals) / len(vals))
++        vals_std = [self.last_edge_factor_msg_std, self.last_edge_factor_si_std]
++        self.last_edge_factor_std = float(sum(vals_std) / len(vals_std))
++
++    def _apply_relation_state_to_adj(self, target_adj: torch.Tensor, edge_state: torch.Tensor | None, normalize_for_message: bool, head: str = 'msg') -> torch.Tensor:
++        tgt = target_adj.coalesce() if target_adj.is_sparse else target_adj.to_sparse().coalesce()
++        if (not self._use_edge_relation_variant()) or edge_state is None or edge_state.numel() == 0:
++            return self._normalize_sparse_by_degree(tgt) if normalize_for_message else tgt
++        factor = self.encoder.edge_relation_factor_from_state(
++            edge_state.to(dtype=tgt.values().dtype, device=tgt.values().device),
++            head=head,
++        )
++        if factor is None or factor.numel() == 0:
++            return self._normalize_sparse_by_degree(tgt) if normalize_for_message else tgt
++        self._update_relation_factor_stats(factor, head=head)
++        new_val = tgt.values() * factor.to(dtype=tgt.values().dtype, device=tgt.values().device)
++        out = torch.sparse_coo_tensor(tgt.indices(), new_val, size=tgt.size(), device=tgt.device).coalesce()
++        if normalize_for_message:
++            out = self._normalize_sparse_by_degree(out)
++        return out
+ 
+     @staticmethod
+     def _ass_adj_ass(ass: torch.Tensor, adj: torch.Tensor):
+@@ -2125,6 +2397,30 @@
+                 next_adj = next_adj.coalesce()
+             adj_dict[k - 1] = next_adj
+             curr_adj = next_adj
++        return adj_dict
++
++    def _build_relation_hierarchy_adj_from_assign(self, adj_leaf: torch.Tensor, edge_state_leaf: torch.Tensor | None, ass_dict: dict) -> dict:
++        if (not self._use_edge_relation_variant()) or edge_state_leaf is None or edge_state_leaf.numel() == 0:
++            return self._build_hierarchy_adj_from_assign(adj_leaf, ass_dict)
++        adj_raw = adj_leaf.coalesce() if adj_leaf.is_sparse else adj_leaf.to_sparse().coalesce()
++        curr_state = edge_state_leaf
++        adj_dict = {self.height: self._apply_relation_state_to_adj(adj_raw, curr_state, normalize_for_message=False, head='si')}
++        for k in range(self.height, 1, -1):
++            ass = ass_dict[k]
++            next_adj_raw = self._ass_adj_ass(ass, adj_raw)
++            if isinstance(next_adj_raw, torch.Tensor) and next_adj_raw.is_sparse:
++                next_adj_raw = next_adj_raw.coalesce()
++            curr_state = self.encoder._coarsen_edge_attr_soft_topk(
++                adj_raw,
++                curr_state,
++                ass,
++                next_adj_raw,
++                topk=getattr(self.encoder, 'edge_attr_pool_topk', 1),
++                use_confidence=getattr(self.encoder, 'edge_attr_pool_confidence', False),
++                conf_power=getattr(self.encoder, 'edge_attr_pool_conf_power', 1.0),
++            )
++            adj_dict[k - 1] = self._apply_relation_state_to_adj(next_adj_raw, curr_state, normalize_for_message=False, head='si')
++            adj_raw = next_adj_raw
+         return adj_dict
+ 
+     def _use_edge_knn_mode(self, num_nodes: int) -> bool:
+@@ -2455,6 +2751,7 @@
+     "b36_v33_augpositive_small": "configs/presets/b36_v33_augpositive_small.json",
+     "b37_v32_hardhier": "configs/presets/b37_v32_hardhier.json",
+     "b38_v32_topk3": "configs/presets/b38_v32_topk3.json",
++    "b50_v40_relation_state": "configs/presets/b50_v40_relation_state.json",
+     # Backward-compatible aliases.
+     "b15_pathb_v12_hier": "configs/presets/b15_pathb_v12_hier.json",
+     "g17_temp1p5_mainline": "configs/presets/g17_temp1p5_mainline.json",
+@@ -2567,6 +2864,14 @@
+         str(preset.get("edge_attr_hidden_dim", 64)),
+         "--edge_attr_fusion_scale",
+         str(preset.get("edge_attr_fusion_scale", 1.0)),
++        "--edge_relation_channels",
++        str(preset.get("edge_relation_channels", 4)),
++        "--edge_relation_hidden_dim",
++        str(preset.get("edge_relation_hidden_dim", 64)),
++        "--edge_relation_assign_scale",
++        str(preset.get("edge_relation_assign_scale", 1.0)),
++        "--edge_relation_reg_lambda",
++        str(preset.get("edge_relation_reg_lambda", 1e-3)),
+         "--edge_attr_pool_topk",
+         str(preset.get("edge_attr_pool_topk", 1)),
+         "--edge_msg_gate_scale",
