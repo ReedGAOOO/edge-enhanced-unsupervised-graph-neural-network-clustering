@@ -1,0 +1,49 @@
+{
+  "name": "e7_ctx_edge",
+  "description": "Can SE-driven edge weighting learn context-dependent edge semantics if endpoint context is in its input? edge_ctx_dim appends z_i*z_j (standardized node features) to edge_attr. On synth_ctx_v1 the role columns make attr0 * (role product) carry the contextual signal (corr 0.60). Compare with e6 b31_synth and e2 b45.",
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "max_nums_default": 6,
+  "defaults": {
+    "epochs": 1500,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1,
+    "warm_start": "auto",
+    "warm_start_epochs": 200,
+    "edge_ctx_dim": 64
+  },
+  "jobs": [
+    {
+      "tag": "b31_ctx",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "synth_ctx_v1_h45_none_ds00",
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h45_contextual_ds00_permEA",
+        "synth_ctx_v1_h55_none_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00_permEA"
+      ]
+    },
+    {
+      "tag": "b45_ctx",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00"
+      ]
+    }
+  ]
+}

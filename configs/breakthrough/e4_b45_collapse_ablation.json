@@ -1,0 +1,16 @@
+{
+  "name": "e4_b45_collapse_ablation",
+  "description": "Which B45 component drives the balanced-plateau collapse on Photo and AIFB? One component off per tag, warm start on (baseline warm: Photo 0.637, AIFB 0.158; B45 warm: 0.004 / 0.017).",
+  "seeds": [0],
+  "max_nums": {"photo": 10, "entities_aifb": 16},
+  "defaults": {"epochs": 1000, "hid_dim": 512, "w_decay": 0.0, "temperature": 1.0, "dropout": 0.1,
+               "eval_freq": 100, "train_log_interval": 200, "n_cluster_trials": 3, "patience": 0, "exp_iters": 1,
+               "warm_start": "auto", "warm_start_epochs": 200},
+  "jobs": [
+    {"tag": "no_msg_gate", "preset": "b45_v31_msgcond_gs050", "datasets": ["photo", "entities_aifb"], "overrides": {"edge_msg_conditioned": false}},
+    {"tag": "no_assign_residual", "preset": "b45_v31_msgcond_gs050", "datasets": ["photo", "entities_aifb"], "overrides": {"edge_attr_fusion_scale": 0.0}},
+    {"tag": "no_se_weights", "preset": "b45_v31_msgcond_gs050", "datasets": ["photo", "entities_aifb"], "overrides": {"edge_weight_learn_logclip": 0.0}},
+    {"tag": "no_adaptive_alpha", "preset": "b45_v31_msgcond_gs050", "datasets": ["photo", "entities_aifb"], "overrides": {"edge_adaptive_alpha": false}},
+    {"tag": "weak_residual", "preset": "b45_v31_msgcond_gs050", "datasets": ["photo", "entities_aifb"], "overrides": {"edge_fusion_gamma_end": 0.3, "edge_fusion_gamma_start": 0.05}}
+  ]
+}

@@ -38,14 +38,19 @@ def fmt(vals):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--exp_dir", default="results/breakthrough_v1/e2_synth_ctx_warm")
+    parser.add_argument("--exp_dir", default="results/breakthrough_v1/e2_synth_ctx_warm",
+                        help="Directory the tables are written to; its runs.csv provides the baseline rows.")
+    parser.add_argument("--extra_dirs", default="", help="Comma-separated extra experiment dirs whose runs are merged in.")
     parser.add_argument("--classic_csv", default="results/breakthrough_v1/e2_synth_ctx_warm/classic_baselines.csv")
     parser.add_argument("--prefix", default="synth_ctx_v1")
     args = parser.parse_args()
     exp_dir = Path(args.exp_dir)
     runs = load_runs(exp_dir / "runs.csv")
+    for extra in [d for d in args.extra_dirs.split(",") if d]:
+        for key, vals in load_runs(Path(extra) / "runs.csv").items():
+            runs[key] = runs.get(key, []) + vals
     classic = load_classic(Path(args.classic_csv))
-    tags = sorted({t for t, _ in runs if t != "baseline"})
+    tags = sorted({t for t, d in runs if t != "baseline" and d.startswith(args.prefix)})
     rows = []
     md = ["| h | model | permEA | none | direct | contextual | arch | descr | direct eff | context eff |",
           "|---|---|---|---|---|---|---|---|---|---|"]

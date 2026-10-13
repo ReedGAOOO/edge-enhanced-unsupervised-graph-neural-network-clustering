@@ -1,0 +1,207 @@
+{
+  "name": "e6_b31_robust",
+  "description": "B31 = B45 without the edge-conditioned message gate (E4: the gate causes the Photo/AIFB collapse). (A) mechanism table on synth_ctx_v1 with warm start, comparable to e2_synth_ctx_warm; (B) acm_multiplex_v2, where choosing edge types alone lifts SGC from 0.55 to 0.71; (C) dual-start recheck on the E3 real graphs.",
+  "seeds": [
+    0
+  ],
+  "max_nums_default": 6,
+  "max_nums": {
+    "cora": 10,
+    "photo": 10,
+    "dblp_magnn_author_v2": 12,
+    "entities_aifb": 16,
+    "urban_paris_plot_v3bsjg": 12,
+    "acm_multiplex_v2": 6
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "b31_synth",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "synth_ctx_v1_h45_none_ds00",
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h45_direct_ds00_permEA",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h45_contextual_ds00_permEA",
+        "synth_ctx_v1_h55_none_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00_permEA",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00_permEA"
+      ],
+      "overrides": {
+        "epochs": 1500,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b45_warm",
+      "preset": "b45_v31_msgcond_gs050",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b45_nowarm",
+      "preset": "b45_v31_msgcond_gs050",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "cora",
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo",
+        "entities_aifb",
+        "urban_paris_plot_v3bsjg"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "cora",
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo",
+        "entities_aifb",
+        "urban_paris_plot_v3bsjg"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    }
+  ]
+}

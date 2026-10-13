@@ -21,6 +21,9 @@ DATASET_MAX_NUMS = {
     "dblp_magnn_author_v2": 12,
     "fraud_amazon_union": 2,
     "fraud_yelp_homo": 2,
+    "acm_multiplex_v1": 6,
+    "acm_multiplex_v2": 6,
+    "imdb_multiplex_v1": 6,
 }
 
 PRESET_MAP = {
@@ -46,7 +49,8 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
 
     parser = argparse.ArgumentParser(description="Run edge-fusion preset")
-    parser.add_argument("--preset", type=str, default="b45_v31_msgcond_gs050")
+    # B31 rather than B45: the B45 message gate collapses training on Photo and AIFB (results/breakthrough_v1/e4_*).
+    parser.add_argument("--preset", type=str, default="b31_dualscalar_assign")
     parser.add_argument("--dataset", type=str, default="cora")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--gpu", type=int, default=0)
@@ -62,6 +66,9 @@ def main() -> None:
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--patience", type=int, default=0)
     parser.add_argument("--n_cluster_trials", type=int, default=3)
+    parser.add_argument("--warm_start", type=str, default="none", choices=["none", "auto", "spectral", "sgc"])
+    parser.add_argument("--warm_start_epochs", type=int, default=200)
+    parser.add_argument("--edge_ctx_dim", type=int, default=0)
     parser.add_argument("--exp_iters", type=int, default=1)
     parser.add_argument("--max_nums", type=int, default=-1, help="Override max_nums; -1 means auto by dataset")
     parser.add_argument("--version", type=str, default="")
@@ -110,6 +117,12 @@ def main() -> None:
         str(args.dropout),
         "--patience",
         str(args.patience),
+        "--warm_start",
+        args.warm_start,
+        "--warm_start_epochs",
+        str(args.warm_start_epochs),
+        "--edge_ctx_dim",
+        str(args.edge_ctx_dim),
         "--epochs",
         str(args.epochs),
         "--eval_freq",
