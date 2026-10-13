@@ -145,14 +145,60 @@ class Exp:
         diag["diag_all_required_live"] = float(dead == 0) if required > 0 else 1.0
         return diag
 
-    def train(self):
-        logger = create_logger(self.configs.log_path)
-        device = self.device
-        data = load_data(self.configs).to(device)
+    def build_model(self, data):
+        """Construct the DSI model exactly as train() does (also used to reload checkpoints for diagnostics)."""
         raw_edge_attr_dim = 1
         if hasattr(data, "edge_attr") and data.edge_attr is not None and data.edge_attr.dim() == 2:
             raw_edge_attr_dim = int(data.edge_attr.shape[1])
         edge_attr_dim = 3 if str(getattr(self.configs, "edge_variant", "V1")).upper() == "V40" else raw_edge_attr_dim
+        return DSI(
+            in_dim=data.x.shape[1],
+            hid_dim=self.configs.hid_dim,
+            num_nodes=data.x.shape[0],
+            temperature=self.configs.temperature,
+            dropout=self.configs.dropout,
+            nonlin_str=self.configs.nonlin,
+            max_nums=self.configs.max_nums,
+            alpha=self.configs.alpha,
+            knn=self.configs.knn,
+            edge_variant=getattr(self.configs, "edge_variant", "V1"),
+            edge_fusion_gamma=getattr(self.configs, "edge_fusion_gamma", 1.0),
+            edge_confidence_quantile=getattr(self.configs, "edge_confidence_quantile", 0.0),
+            edge_adaptive_alpha=bool(getattr(self.configs, "edge_adaptive_alpha", False)),
+            edge_adaptive_alpha_strength=float(getattr(self.configs, "edge_adaptive_alpha_strength", 2.0)),
+            edge_adaptive_alpha_bias=float(getattr(self.configs, "edge_adaptive_alpha_bias", 0.0)),
+            edge_reliability_temp=float(getattr(self.configs, "edge_reliability_temp", 1.0)),
+            edge_attr_hidden_dim=int(getattr(self.configs, "edge_attr_hidden_dim", 64)),
+            edge_attr_fusion_scale=float(getattr(self.configs, "edge_attr_fusion_scale", 1.0)),
+            edge_attr_dim=edge_attr_dim,
+            raw_edge_attr_dim=raw_edge_attr_dim,
+            edge_attr_hierarchical=bool(getattr(self.configs, "edge_attr_hierarchical", False)),
+            edge_attr_pool_topk=int(getattr(self.configs, "edge_attr_pool_topk", 1)),
+            edge_msg_conditioned=bool(getattr(self.configs, "edge_msg_conditioned", False)),
+            edge_msg_gate_scale=float(getattr(self.configs, "edge_msg_gate_scale", 0.35)),
+            edge_msg_matched_only=bool(getattr(self.configs, "edge_msg_matched_only", False)),
+            edge_msg_confidence_gate=bool(getattr(self.configs, "edge_msg_confidence_gate", False)),
+            edge_msg_confidence_temp=float(getattr(self.configs, "edge_msg_confidence_temp", 1.0)),
+            edge_attr_pool_confidence=bool(getattr(self.configs, "edge_attr_pool_confidence", False)),
+            edge_attr_pool_conf_power=float(getattr(self.configs, "edge_attr_pool_conf_power", 1.0)),
+            edge_weight_learn_reg_lambda=float(getattr(self.configs, "edge_weight_learn_reg_lambda", 0.02)),
+            edge_weight_learn_logclip=float(getattr(self.configs, "edge_weight_learn_logclip", 0.8)),
+            edge_weight_learn_temp=float(getattr(self.configs, "edge_weight_learn_temp", 1.0)),
+            edge_weight_learn_apply_to=str(getattr(self.configs, "edge_weight_learn_apply_to", "both")),
+            edge_aug_prior_scale=float(getattr(self.configs, "edge_aug_prior_scale", 0.0)),
+            edge_aug_prior_mode=str(getattr(self.configs, "edge_aug_prior_mode", "raw")),
+            edge_state_temp=float(getattr(self.configs, "edge_state_temp", 1.0)),
+            edge_state_lambda_boundary=float(getattr(self.configs, "edge_state_lambda_boundary", 0.1)),
+            edge_state_lambda_support=float(getattr(self.configs, "edge_state_lambda_support", 0.1)),
+            edge_state_use_context=bool(getattr(self.configs, "edge_state_use_context", False)),
+            knn_mode=str(getattr(self.configs, "knn_mode", "auto")),
+            knn_auto_threshold=int(getattr(self.configs, "knn_auto_threshold", 20000)),
+        ).to(self.device)
+
+    def train(self):
+        logger = create_logger(self.configs.log_path)
+        device = self.device
+        data = load_data(self.configs).to(device)
 
         if hasattr(data, "y") and data.y is not None and data.y.numel() > 0:
             known_ratio = float((data.y >= 0).float().mean().item())
@@ -164,49 +210,7 @@ class Exp:
         run_stats: List[Dict[str, float]] = []
         for exp_iter in range(self.configs.exp_iters):
             logger.info(f"\ntrain iters {exp_iter}")
-            model = DSI(
-                in_dim=data.x.shape[1],
-                hid_dim=self.configs.hid_dim,
-                num_nodes=data.x.shape[0],
-                temperature=self.configs.temperature,
-                dropout=self.configs.dropout,
-                nonlin_str=self.configs.nonlin,
-                max_nums=self.configs.max_nums,
-                alpha=self.configs.alpha,
-                knn=self.configs.knn,
-                edge_variant=getattr(self.configs, "edge_variant", "V1"),
-                edge_fusion_gamma=getattr(self.configs, "edge_fusion_gamma", 1.0),
-                edge_confidence_quantile=getattr(self.configs, "edge_confidence_quantile", 0.0),
-                edge_adaptive_alpha=bool(getattr(self.configs, "edge_adaptive_alpha", False)),
-                edge_adaptive_alpha_strength=float(getattr(self.configs, "edge_adaptive_alpha_strength", 2.0)),
-                edge_adaptive_alpha_bias=float(getattr(self.configs, "edge_adaptive_alpha_bias", 0.0)),
-                edge_reliability_temp=float(getattr(self.configs, "edge_reliability_temp", 1.0)),
-                edge_attr_hidden_dim=int(getattr(self.configs, "edge_attr_hidden_dim", 64)),
-                edge_attr_fusion_scale=float(getattr(self.configs, "edge_attr_fusion_scale", 1.0)),
-                edge_attr_dim=edge_attr_dim,
-                raw_edge_attr_dim=raw_edge_attr_dim,
-                edge_attr_hierarchical=bool(getattr(self.configs, "edge_attr_hierarchical", False)),
-                edge_attr_pool_topk=int(getattr(self.configs, "edge_attr_pool_topk", 1)),
-                edge_msg_conditioned=bool(getattr(self.configs, "edge_msg_conditioned", False)),
-                edge_msg_gate_scale=float(getattr(self.configs, "edge_msg_gate_scale", 0.35)),
-                edge_msg_matched_only=bool(getattr(self.configs, "edge_msg_matched_only", False)),
-                edge_msg_confidence_gate=bool(getattr(self.configs, "edge_msg_confidence_gate", False)),
-                edge_msg_confidence_temp=float(getattr(self.configs, "edge_msg_confidence_temp", 1.0)),
-                edge_attr_pool_confidence=bool(getattr(self.configs, "edge_attr_pool_confidence", False)),
-                edge_attr_pool_conf_power=float(getattr(self.configs, "edge_attr_pool_conf_power", 1.0)),
-                edge_weight_learn_reg_lambda=float(getattr(self.configs, "edge_weight_learn_reg_lambda", 0.02)),
-                edge_weight_learn_logclip=float(getattr(self.configs, "edge_weight_learn_logclip", 0.8)),
-                edge_weight_learn_temp=float(getattr(self.configs, "edge_weight_learn_temp", 1.0)),
-                edge_weight_learn_apply_to=str(getattr(self.configs, "edge_weight_learn_apply_to", "both")),
-                edge_aug_prior_scale=float(getattr(self.configs, "edge_aug_prior_scale", 0.0)),
-                edge_aug_prior_mode=str(getattr(self.configs, "edge_aug_prior_mode", "raw")),
-                edge_state_temp=float(getattr(self.configs, "edge_state_temp", 1.0)),
-                edge_state_lambda_boundary=float(getattr(self.configs, "edge_state_lambda_boundary", 0.1)),
-                edge_state_lambda_support=float(getattr(self.configs, "edge_state_lambda_support", 0.1)),
-                edge_state_use_context=bool(getattr(self.configs, "edge_state_use_context", False)),
-                knn_mode=str(getattr(self.configs, "knn_mode", "auto")),
-                knn_auto_threshold=int(getattr(self.configs, "knn_auto_threshold", 20000)),
-            ).to(device)
+            model = self.build_model(data)
             optimizer = AdamW(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
             if self.configs.task == "Clustering":
                 stat = self.train_clu(data, model, optimizer, logger)

@@ -31,6 +31,22 @@ def build_feature_edge_weight(x, edge_index, temp=1.0):
     return torch.sigmoid(cos / temp)
 
 
+def build_endpoint_context_attr(x: torch.Tensor, edge_index: torch.Tensor, max_dim: int) -> torch.Tensor:
+    """Symmetric endpoint context z_i * z_j appended to edge_attr, so a context-free edge-weight MLP can still
+    express edge semantics that depend on the endpoints (e.g. synth_ctx_v1 'contextual' edges).
+
+    z is the standardized node feature matrix, PCA-reduced to max_dim when it is wider than that.
+    """
+    z = x.float()
+    z = (z - z.mean(dim=0, keepdim=True)) / z.std(dim=0, unbiased=False, keepdim=True).clamp_min(1e-6)
+    if z.shape[1] > max_dim:
+        _, _, v = torch.pca_lowrank(z, q=max_dim, center=False)
+        z = z @ v[:, :max_dim]
+        z = z / z.std(dim=0, unbiased=False, keepdim=True).clamp_min(1e-6)
+    src, dst = edge_index[0], edge_index[1]
+    return z[src] * z[dst]
+
+
 def standardize_edge_attr(edge_attr: torch.Tensor) -> torch.Tensor:
     if edge_attr is None or edge_attr.numel() == 0:
         return edge_attr
@@ -215,6 +231,9 @@ def load_data(configs):
         if bool(getattr(configs, "append_generic_edge_attr", False)):
             edge_attr_generic = build_generic_edge_attr(data.x, edge_index, edge_weight=edge_weight)
             edge_attr = torch.cat([edge_attr, edge_attr_generic], dim=1)
+    ctx_dim = int(getattr(configs, "edge_ctx_dim", 0))
+    if ctx_dim > 0:
+        edge_attr = torch.cat([edge_attr, build_endpoint_context_attr(data.x, edge_index, ctx_dim)], dim=1)
 
     edge_index, edge_weight, edge_attr = coalesce_edge_data(
         edge_index=edge_index,

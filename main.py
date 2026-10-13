@@ -97,6 +97,8 @@ parser.add_argument('--edge_attr_hidden_dim', type=int, default=64,
                     help='Hidden size for edge-attribute encoder in V6/V7.')
 parser.add_argument('--edge_attr_fusion_scale', type=float, default=1.0,
                     help='Fusion scale for edge-attribute terms in V6/V7.')
+parser.add_argument('--edge_ctx_dim', type=int, default=0,
+                    help='Append symmetric endpoint context z_i*z_j (standardized node features, PCA-reduced to this many dims if wider) to edge_attr. 0 disables.')
 parser.add_argument('--append_generic_edge_attr', action='store_true',
                     help='Append generic edge features to provided edge_attr (for custom datasets).')
 parser.add_argument('--edge_attr_weight_blend', type=float, default=0.0,

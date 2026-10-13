@@ -34,12 +34,18 @@ METRIC_KEYS = [
 ]
 
 
+# main.py flags declared with BooleanOptionalAction (default on); False must be spelled --no-<flag>.
+NEGATABLE_FLAGS = {"known_only_eval"}
+
+
 def preset_to_cli(preset: dict) -> list:
     cli = []
     for key, val in preset.items():
         if isinstance(val, bool):
             if val:
                 cli.append(f"--{key}")
+            elif key in NEGATABLE_FLAGS:
+                cli.append(f"--no-{key}")
         elif val is not None:
             cli += [f"--{key}", str(val)]
     return cli
@@ -89,9 +95,8 @@ def build_cmd(job: dict, plan: dict, args, version: str) -> list:
         "--version", version,
         "--save_path", f"{version}.pt",
     ]
-    # Later flags win in argparse, so plan overrides take precedence over the preset.
-    cmd += preset_to_cli(preset)
-    cmd += preset_to_cli(overrides)
+    # Merge before rendering so an override can also switch off a store_true flag set by the preset.
+    cmd += preset_to_cli({**preset, **overrides})
     return cmd
 
 
