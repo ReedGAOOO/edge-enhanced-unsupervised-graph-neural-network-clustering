@@ -518,11 +518,21 @@ class DSI(nn.Module):
             )
             adj_si_dict = self._build_hierarchy_adj_from_assign(adj_train_si, ass_aug_dict)
             loss = self._si_loss(ass_aug_dict, adj_si_dict, eps)
+        # Kept (with grad) so the warm-start phase can supervise the leaf assignment through any variant's path.
+        self.last_ass_dict = ass_aug_dict
         if self._use_learnable_edge_weight_variant() and self.edge_weight_learn_reg_lambda > 0.0:
             edge_reg = self.edge_weight_learn_reg_lambda * edge_reg_raw
             self.last_edge_reg = float(edge_reg.detach().item())
             loss = loss + edge_reg
         return loss
+
+    def warm_start_loss(self, data, pseudo: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+        """Cross-entropy between the leaf-level assignment and a fixed pseudo partition."""
+        self.se_loss(data)
+        ass = self.last_ass_dict[self.height]
+        if ass.is_sparse:
+            ass = ass.to_dense()
+        return torch.nn.functional.nll_loss(torch.log(ass + eps), pseudo)
 
     def _use_edge_attr_variant(self) -> bool:
         return self.edge_variant in {'V6', 'V7', 'V8', 'V12', 'V13', 'V31', 'V32', 'V33', 'V40'}

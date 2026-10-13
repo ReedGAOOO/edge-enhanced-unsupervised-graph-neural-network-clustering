@@ -26,11 +26,7 @@ DATASET_MAX_NUMS = {
 PRESET_MAP = {
     "baseline_v1": "configs/presets/baseline_v1.json",
     "b31_dualscalar_assign": "configs/presets/b31_dualscalar_assign.json",
-    "g20_se_consistent_main": "configs/presets/g20_se_consistent_main.json",
-    "b40_v31_msgcond": "configs/presets/b40_v31_msgcond.json",
     "b45_v31_msgcond_gs050": "configs/presets/b45_v31_msgcond_gs050.json",
-    "b47_v31_msgcond_gs050_matchonly": "configs/presets/b47_v31_msgcond_gs050_matchonly.json",
-    "b48_v31_msgcond_gs050_confgate": "configs/presets/b48_v31_msgcond_gs050_confgate.json",
 }
 
 
@@ -54,11 +50,18 @@ def main() -> None:
     parser.add_argument("--dataset", type=str, default="cora")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--epochs", type=int, default=180)
-    parser.add_argument("--eval_freq", type=int, default=20)
-    parser.add_argument("--train_log_interval", type=int, default=20)
-    parser.add_argument("--hid_dim", type=int, default=256)
-    parser.add_argument("--n_cluster_trials", type=int, default=1)
+    parser.add_argument("--root_path", type=str, default="data")
+    # Defaults follow the reference DSE configs. The old 60-180 epoch / hid 256 budget left the
+    # backbone untrained (synthetic h65 NMI 0.008 vs 0.53 at 2000 epochs; see results/breakthrough_v1/e1_backbone_gate).
+    parser.add_argument("--epochs", type=int, default=2000)
+    parser.add_argument("--eval_freq", type=int, default=100)
+    parser.add_argument("--train_log_interval", type=int, default=200)
+    parser.add_argument("--hid_dim", type=int, default=512)
+    parser.add_argument("--w_decay", type=float, default=0.0)
+    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--patience", type=int, default=0)
+    parser.add_argument("--n_cluster_trials", type=int, default=3)
     parser.add_argument("--exp_iters", type=int, default=1)
     parser.add_argument("--max_nums", type=int, default=-1, help="Override max_nums; -1 means auto by dataset")
     parser.add_argument("--version", type=str, default="")
@@ -97,6 +100,16 @@ def main() -> None:
         "main.py",
         "--dataset",
         args.dataset,
+        "--root_path",
+        args.root_path,
+        "--w_decay",
+        str(args.w_decay),
+        "--temperature",
+        str(args.temperature),
+        "--dropout",
+        str(args.dropout),
+        "--patience",
+        str(args.patience),
         "--epochs",
         str(args.epochs),
         "--eval_freq",

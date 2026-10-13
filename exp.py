@@ -400,6 +400,7 @@ class Exp:
             "epochs": int(self.configs.epochs),
             "eval_freq": int(self.configs.eval_freq),
             "seed": int(self.configs.seed),
+            **getattr(self, "warm_info", {}),
         }
 
     def _edge_fusion_gamma_for_epoch(self, epoch: int) -> float:
@@ -560,6 +561,38 @@ class Exp:
             loss = model.se_loss(data)
         return float(loss.detach().item())
 
+    def _warm_start(self, data, model, optimizer, logger) -> None:
+        method = str(getattr(self.configs, "warm_start", "none")).lower()
+        warm_epochs = int(getattr(self.configs, "warm_start_epochs", 0))
+        self.warm_info = {"warm_start": method, "warm_start_epochs": warm_epochs}
+        if method == "none" or warm_epochs <= 0:
+            return
+        from utils.warm_start import build_pseudo_partition
+
+        k = int(getattr(self.configs, "warm_start_k", 0)) or int(data.num_classes)
+        k = min(k, int(self.configs.max_nums[0]))
+        pseudo_np, info = build_pseudo_partition(
+            data.edge_index.detach().cpu().numpy(), data.x.detach().cpu().numpy(), k=k,
+            method=method, seed=int(getattr(self.configs, "seed", 0)),
+        )
+        self.warm_info.update(info)
+        self.warm_info["warm_k"] = k
+        if self._has_valid_labels(data):
+            # Diagnostic only: how good the pseudo partition already is. Not used for any selection.
+            y = data.y.detach().cpu().numpy()
+            known = y >= 0
+            self.warm_info["warm_pseudo_nmi"] = float(sk_metrics.normalized_mutual_info_score(y[known], pseudo_np[known]))
+        logger.info(f"[WarmStart] {self.warm_info}")
+        pseudo = torch.as_tensor(pseudo_np, dtype=torch.long, device=data.x.device)
+        for epoch in range(1, warm_epochs + 1):
+            model.train()
+            loss = model.warm_start_loss(data, pseudo)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            if epoch == 1 or epoch == warm_epochs or epoch % 50 == 0:
+                logger.info(f"[WarmStart] Epoch {epoch}: ce={float(loss.detach().item()):.4f}")
+
     def train_clu(self, data, model, optimizer, logger):
         logger.info("--------------------------Training Start-------------------------")
         epochs = int(self.configs.epochs)
@@ -576,6 +609,8 @@ class Exp:
         no_improve = 0
         checkpoint_path = Path("./checkpoints") / self.configs.save_path
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self._warm_start(data, model, optimizer, logger)
 
         for epoch in range(1, epochs + 1):
             model.train()

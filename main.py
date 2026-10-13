@@ -143,8 +143,14 @@ parser.add_argument('--edge_state_lambda_support', type=float, default=0.1,
                     help='For V40: weight for support-edge split penalty.')
 parser.add_argument('--edge_state_use_context', action='store_true',
                     help='For V40: condition edge-state prediction on endpoint node context in addition to edge_attr.')
-parser.add_argument('--known_only_eval', action='store_true',
-                    help='For datasets with explicit unknown label mapping, remap unknown labels to -1 during evaluation.')
+parser.add_argument('--known_only_eval', action=argparse.BooleanOptionalAction, default=True,
+                    help='For datasets with explicit unknown label mapping, remap unknown labels to -1 during evaluation '
+                         '(default on; --no-known_only_eval scores "unknown" as a real class, as pre-2026-10 Urban runs did).')
+parser.add_argument('--warm_start', type=str, default='none', choices=['none', 'auto', 'spectral', 'sgc'],
+                    help='Pre-train the leaf assignment on a pseudo partition before SE training. auto picks '
+                         'spectral(A) or SGC(A,X)+KMeans by lower 2-level structural entropy (label-free).')
+parser.add_argument('--warm_start_epochs', type=int, default=200)
+parser.add_argument('--warm_start_k', type=int, default=0, help='Pseudo partition size; 0 uses the number of classes.')
 parser.add_argument('--train_log_interval', type=int, default=1,
                     help='Epoch interval for Stage2 training loss logs.')
 parser.add_argument('--amp_bf16', action='store_true',
