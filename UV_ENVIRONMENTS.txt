@@ -1,0 +1,42 @@
+Project environment declaration
+===============================
+
+Default for AI agents:
+
+- Use uv for root graph-neural-network code.
+- Use the nested uv project in `reference/urbanity` for urbanity reference
+  package work.
+- Do not use conda `base`.
+- Do not attempt to use the removed shared `gnn` conda environment.
+
+Root graph-neural-network environment:
+
+  uv venv --python 3.11 .venv
+  uv pip sync --python .venv/bin/python --torch-backend cu129 requirements.uv.lock.txt
+
+Run root commands with:
+
+  uv run --python .venv/bin/python python <script.py>
+
+Urbanity reference package:
+
+  cd reference/urbanity
+  uv sync --locked
+
+Run urbanity commands with:
+
+  cd reference/urbanity
+  uv run --locked python <script.py>
+
+Notes:
+
+- The root lock file is generated with PyTorch CUDA 12.9 and PyG wheels from
+  https://data.pyg.org/whl/torch-2.8.0+cu129.html. torch is pinned to 2.8.0 so
+  it matches the torch-scatter pt28 wheel (torch 2.12 + scatter pt28 aborts with
+  std::bad_alloc on import). `--torch-backend cu129` is required for the sync.
+- Project data lives on the SN730 drive (currently F:):
+  /mnt/f/WSL Projects Data/edge-enhanced-unsupervised-graph-neural-network-clustering/data
+  The repo-local data/ mount currently points at an empty folder on D:, so pass
+  --root_path explicitly until the mount is fixed.
+- The old urbanity conda and Poetry locks are retained only as text backups.
+
