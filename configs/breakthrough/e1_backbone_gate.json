@@ -1,0 +1,20 @@
+{
+  "name": "e1_backbone_gate",
+  "description": "Is the DSE/LSEnet backbone under-trained? Old project budget (60 ep, hid 128, 1 trial) vs reference DSE config (2000 ep, hid 512, w_decay 0, temperature 1.0, 3 trials).",
+  "seeds": [0],
+  "max_nums_default": 12,
+  "defaults": {"patience": 0, "exp_iters": 1},
+  "jobs": [
+    {"tag": "baseline_old_budget", "preset": "baseline_v1",
+     "datasets": ["cora", "synth_mech_full_v1_h65_s90_ds00", "synth_mech_full_v1_h85_s90_ds00"],
+     "overrides": {"epochs": 60, "hid_dim": 128, "eval_freq": 20, "train_log_interval": 20, "n_cluster_trials": 1}},
+    {"tag": "baseline_official", "preset": "baseline_v1",
+     "datasets": ["cora", "synth_mech_full_v1_h65_s90_ds00", "synth_mech_full_v1_h85_s90_ds00"],
+     "overrides": {"epochs": 2000, "hid_dim": 512, "w_decay": 0.0, "temperature": 1.0, "dropout": 0.1,
+                   "eval_freq": 100, "train_log_interval": 200, "n_cluster_trials": 3}},
+    {"tag": "b45_official", "preset": "b45_v31_msgcond_gs050",
+     "datasets": ["cora", "synth_mech_full_v1_h65_s90_ds00", "synth_mech_full_v1_h85_s90_ds00"],
+     "overrides": {"epochs": 2000, "hid_dim": 512, "w_decay": 0.0, "temperature": 1.0, "dropout": 0.1,
+                   "eval_freq": 100, "train_log_interval": 200, "n_cluster_trials": 3}}
+  ]
+}

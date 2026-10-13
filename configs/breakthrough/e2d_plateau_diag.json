@@ -1,0 +1,14 @@
+{
+  "name": "e2d_plateau_diag",
+  "description": "Why does the DSE backbone stay on the trivial SE plateau on weak-feature graphs? Short runs on synth_ctx_v1_h55_none (SGC2+KMeans reaches 0.73).",
+  "seeds": [0],
+  "max_nums_default": 6,
+  "defaults": {"epochs": 1000, "hid_dim": 512, "w_decay": 0.0, "temperature": 1.0, "dropout": 0.1,
+               "eval_freq": 100, "train_log_interval": 50, "n_cluster_trials": 3, "patience": 0, "exp_iters": 1},
+  "jobs": [
+    {"tag": "lr3e-3", "preset": "baseline_v1", "datasets": ["synth_ctx_v1_h55_none_ds00"], "overrides": {"lr": 0.003}},
+    {"tag": "hid64", "preset": "baseline_v1", "datasets": ["synth_ctx_v1_h55_none_ds00"], "overrides": {"hid_dim": 64}},
+    {"tag": "maxnums12", "preset": "baseline_v1", "datasets": ["synth_ctx_v1_h55_none_ds00"], "overrides": {"max_nums": 12}},
+    {"tag": "sgcx", "preset": "baseline_v1", "datasets": ["synth_ctx_v1_h55_none_ds00_sgcx"]}
+  ]
+}
