@@ -1,0 +1,351 @@
+---
+title: "Urban Graph Differences: 3+6 Factor Diagnostic Report"
+subtitle: "城市图构建差异的 3+6 因素诊断"
+author: "edge-enhanced-unsupervised-graph-neural-network-clustering"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output: md_document
+mainfont: "Noto Sans CJK SC"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 10,
+  fig.height = 6,
+  dpi = 220
+)
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(ggplot2)
+  library(ggrepel)
+  library(knitr)
+  library(patchwork)
+  library(readr)
+  library(scales)
+  library(tidyr)
+})
+
+base_dir <- "../results/data_construction_series/urban_all_city_exploration"
+figure_dir <- file.path(base_dir, "figures")
+
+raw <- read_csv(file.path(base_dir, "raw_city_diagnostics.csv"), show_col_types = FALSE)
+priority <- read_csv(file.path(base_dir, "all_city_exploration_priority.csv"), show_col_types = FALSE)
+driver_corr <- read_csv(file.path(base_dir, "city_difference_driver_correlations.csv"), show_col_types = FALSE)
+driver_frame <- read_csv(file.path(base_dir, "city_difference_driver_frame.csv"), show_col_types = FALSE)
+city_types <- read_csv(file.path(base_dir, "city_difference_city_typology.csv"), show_col_types = FALSE)
+additional <- read_csv(file.path(base_dir, "additional_city_difference_factors.csv"), show_col_types = FALSE)
+
+type_palette <- c(
+  "anchor candidate" = "#008837",
+  "edge-rich but label-limited" = "#7B3294",
+  "label-rich but edge-weak" = "#4393C3",
+  "projection-risk diagnostic" = "#D6604D",
+  "secondary diagnostic" = "#FDAE61",
+  "low-priority or negative control" = "#999999"
+)
+
+factor_palette <- c(
+  "primary" = "#4E79A7",
+  "additional" = "#F28E2B"
+)
+
+base_theme <- theme_minimal(base_size = 10) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 12),
+    plot.subtitle = element_text(size = 9, color = "grey30"),
+    legend.title = element_text(size = 9),
+    legend.text = element_text(size = 8)
+  )
+```
+
+# Urban 城市图差异的 3+6 因素诊断报告
+
+**目的。** 本报告解释为什么同一套 Urban 原始数据在不同城市上会形成质量差异明显的图，并说明这些差异如何影响后续 edge-aware GNN 实验设计。
+
+# 核心结论
+
+Urban 图质量的跨城市差异不是单一原因造成的。当前证据不支持简单归因，例如“只是原始数据源不同”或“只是城市形态不同”。更稳妥的解释是分层诊断：
+
+1. **三个一级因素**是数据与标签口径、图投影构建规则、可观测城市形态代理变量。
+2. **六个二级因素**是任务标签错配、类别/度基线膨胀、label-pair 异配结构、空间混杂、endpoint feature 冗余、relation 粒度问题。
+3. WashingtonDC 是当前最干净的 anchor city；Singapore 是 edge-rich but label-limited；Tokyo 和 Paris 是 label-rich but edge-weak；Shanghai 和 Boston 更适合作为 projection-risk diagnostic。
+
+本报告是诊断性分析，不是因果识别。关于河流、地形、规划制度、地方经济等宏观解释，目前只能作为合理假设；若要证明，需要外部协变量和匹配/反事实构图实验。
+
+# 诊断框架
+
+3+6 框架把“已经可以用现有数据检验的因素”和“仍需要外部数据支持的假设”分开。一级因素回答数据和构图是否可用；二级因素回答为什么一个图在 edge probe 上看似有效，但未必真的提供了独立的 edge semantics。
+
+```{r factor-taxonomy, fig.cap="Figure 1. 3+6 factor taxonomy for cross-city Urban graph differences."}
+factor_taxonomy <- tibble::tribble(
+  ~factor, ~layer, ~evidence_status, ~risk_if_ignored,
+  "数据 / 标签口径", "primary", "已直接观测", "label coverage 或类别不平衡可能主导结果",
+  "图投影构建规则", "primary", "已直接观测", "projection tail 可能制造人工边",
+  "可观测城市形态", "primary", "代理证据", "密度和建筑尺度差异会改变 edge usefulness",
+  "任务标签错配", "additional", "已诊断", "same-label 测试会漏掉有意义的 heterophily",
+  "类别 / 度基线", "additional", "已诊断", "homophily 可能被类别或拓扑偏斜抬高",
+  "Label-pair 异配结构", "additional", "已诊断", "跨类功能关系可能被误判为噪声",
+  "空间混杂", "additional", "已诊断", "距离本身能解释部分 edge signal",
+  "Endpoint feature 冗余", "additional", "已诊断", "edge_attr 可能重编码端点形态",
+  "Relation 粒度", "additional", "已诊断", "relation bits 可能过粗或被单一关系支配"
+) |>
+  mutate(
+    factor = factor(factor, levels = rev(factor)),
+    layer = factor(layer, levels = c("primary", "additional"))
+  )
+
+ggplot(factor_taxonomy, aes(x = layer, y = factor, fill = layer)) +
+  geom_tile(color = "white", linewidth = 0.5, width = 0.9, height = 0.75) +
+  geom_text(aes(label = evidence_status), size = 3.2, fontface = "bold") +
+  geom_text(aes(x = 2.55, label = risk_if_ignored), hjust = 0, size = 3.1, color = "grey20") +
+  scale_fill_manual(values = factor_palette) +
+  coord_cartesian(xlim = c(0.55, 4.9), clip = "off") +
+  labs(
+    title = "3+6 因素：从数据可用性到 edge 语义解释",
+    subtitle = "一级因素判断图是否可用；二级因素判断 edge 效果能否被解释为独立语义。",
+    x = NULL,
+    y = NULL,
+    fill = "Layer"
+  ) +
+  base_theme +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_blank(),
+    legend.position = "bottom",
+    plot.margin = margin(5.5, 120, 5.5, 5.5)
+  )
+```
+
+# 三个一级因素的证据
+
+第一轮审计支持混合解释。不同城市的 label coverage 和 class balance 差异很大；projection-tail risk 也明显不同；城市形态代理变量，尤其建筑 footprint 异质性，与 edge_attr permutation sensitivity 有关系。
+
+```{r primary-evidence, fig.cap="Figure 2. Evidence for primary factors: label quality, projection-tail risk, and urban-form proxies."}
+joined <- driver_frame |>
+  left_join(city_types |> select(city, typology), by = "city")
+
+top_drivers <- driver_corr |>
+  filter(target %in% c("edge_probe_gain", "edge_probe_perm_drop", "overall_same_label_ratio")) |>
+  group_by(driver, driver_label, driver_group) |>
+  summarize(max_abs_rho = max(abs_spearman_rho, na.rm = TRUE), .groups = "drop") |>
+  arrange(desc(max_abs_rho)) |>
+  slice_head(n = 12)
+
+heat <- driver_corr |>
+  semi_join(top_drivers |> select(driver), by = "driver") |>
+  filter(target %in% c("edge_probe_gain", "edge_probe_perm_drop", "overall_same_label_ratio")) |>
+  mutate(
+    target = recode(
+      target,
+      "edge_probe_gain" = "Edge gain",
+      "edge_probe_perm_drop" = "Permutation drop",
+      "overall_same_label_ratio" = "Same-label ratio"
+    ),
+    driver_label = factor(driver_label, levels = rev(top_drivers$driver_label))
+  )
+
+p_heat <- ggplot(heat, aes(target, driver_label, fill = spearman_rho)) +
+  geom_tile(color = "white", linewidth = 0.35) +
+  geom_text(aes(label = number(spearman_rho, accuracy = 0.01)), size = 2.7) +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0, limits = c(-1, 1)) +
+  labs(
+    title = "A. Driver association screen",
+    subtitle = "13 个城市上的 Spearman 相关；仅作为诊断证据。",
+    x = NULL,
+    y = NULL,
+    fill = "rho"
+  ) +
+  base_theme +
+  theme(panel.grid = element_blank(), legend.position = "bottom")
+
+p_city <- ggplot(
+  joined,
+  aes(projection_tail_score, edge_probe_gain, color = typology, size = known_label_ratio)
+) +
+  geom_hline(yintercept = 0, color = "grey70", linewidth = 0.25) +
+  geom_point(alpha = 0.9) +
+  geom_text_repel(aes(label = city_label), size = 2.7, max.overlaps = Inf) +
+  scale_color_manual(values = type_palette, drop = FALSE) +
+  scale_size_area(max_size = 6, labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = label_number(accuracy = 0.001)) +
+  labs(
+    title = "B. Projection-tail risk vs edge gain",
+    subtitle = "高 tail 城市可能反映构图 artifact，而不一定是更强 edge semantics。",
+    x = "Projection-tail score",
+    y = "AUC gain vs endpoint-only",
+    color = "City type",
+    size = "Known labels"
+  ) +
+  base_theme +
+  theme(legend.position = "bottom")
+
+p_heat | p_city
+```
+
+解读：WashingtonDC 的 edge 证据强，同时 projection-tail risk 不极端，因此适合作为主线 anchor。Singapore 的 edge 证据也强，但 label coverage 偏低。Shanghai 和 Boston 的价值在于暴露 projection risk。Paris 是重要 negative case：标签很多，但 edge 证据弱。
+
+# 六个二级因素的证据
+
+第二轮审计说明，单独看 homophily 不够。所有城市的 same-label lift 都高于随机 node-label baseline，但这个 lift 并不能排序 edge_attr 的真实有用性。因此，edge semantics 应同时评估 **homophily** 和 **structured heterophily**。
+
+```{r additional-evidence-1, fig.cap="Figure 3. Task mismatch and heterophily diagnostics."}
+add_join <- additional |>
+  left_join(priority |> select(city, edge_probe_gain, edge_probe_perm_drop), by = "city") |>
+  left_join(city_types |> select(city, typology), by = "city")
+
+p_lift <- ggplot(
+  add_join,
+  aes(same_label_lift_vs_node_baseline, edge_probe_gain, color = typology, size = known_label_ratio)
+) +
+  geom_hline(yintercept = 0, color = "grey70", linewidth = 0.25) +
+  geom_point(alpha = 0.9) +
+  geom_text_repel(aes(label = city_label), size = 2.7, max.overlaps = Inf) +
+  scale_color_manual(values = type_palette, drop = FALSE) +
+  scale_size_area(max_size = 6, labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = label_number(accuracy = 0.001)) +
+  labs(
+    title = "A. Same-label lift does not rank edge usefulness",
+    subtitle = "所有城市都有正 lift，但高 lift 不等于更强 edge_attr 证据。",
+    x = "Observed same-label minus node-label baseline",
+    y = "AUC gain vs endpoint-only",
+    color = "City type",
+    size = "Known labels"
+  ) +
+  base_theme +
+  theme(legend.position = "none")
+
+p_mi <- ggplot(
+  add_join,
+  aes(edge_label_mi_norm, heterophily_ratio, color = typology, size = top_cross_label_pair_share)
+) +
+  geom_point(alpha = 0.9) +
+  geom_text_repel(aes(label = city_label), size = 2.7, max.overlaps = Inf) +
+  scale_color_manual(values = type_palette, drop = FALSE) +
+  scale_size_area(max_size = 6, labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title = "B. Heterophily can still be semantic",
+    subtitle = "Commercial-Food 等常见跨类边可能是功能关系，而不是噪声。",
+    x = "Normalized edge label-pair mutual information",
+    y = "Heterophilous known-edge share",
+    color = "City type",
+    size = "Top cross-pair share"
+  ) +
+  base_theme +
+  theme(legend.position = "none")
+
+p_lift | p_mi
+```
+
+这张图改变了对若干城市的解读。Beijing 和 Shanghai 的 label-pair 结构强，但 edge-probe 证据并不强；Tokyo 和 Paris 的标签较充分，但 same-label 学习不足以让 edge_attr 变得有用。因此下一步 probe 不能只预测 same-label，还应加入 label-pair 或 relation-pair 目标。
+
+```{r additional-evidence-2, fig.cap="Figure 4. Confounding and redundancy diagnostics."}
+p_redundancy <- ggplot(
+  add_join,
+  aes(edge_attr_endpoint_r2_nonrelation, edge_probe_gain, color = typology, size = edge_probe_perm_drop)
+) +
+  geom_hline(yintercept = 0, color = "grey70", linewidth = 0.25) +
+  geom_point(alpha = 0.9) +
+  geom_text_repel(aes(label = city_label), size = 2.7, max.overlaps = Inf) +
+  scale_color_manual(values = type_palette, drop = FALSE) +
+  scale_size_area(max_size = 6, labels = label_number(accuracy = 0.001)) +
+  scale_y_continuous(labels = label_number(accuracy = 0.001)) +
+  labs(
+    title = "A. Endpoint-feature redundancy",
+    subtitle = "高 R2 说明 edge_attr 部分重编码了端点形态或相似性。",
+    x = "R2: predict non-relation edge_attr from endpoint features",
+    y = "AUC gain vs endpoint-only",
+    color = "City type",
+    size = "Permutation drop"
+  ) +
+  base_theme +
+  theme(legend.position = "none")
+
+p_space <- ggplot(
+  add_join,
+  aes(distance_only_same_label_auc, node_similarity_same_label_auc, color = typology, size = degree_label_eta2)
+) +
+  geom_hline(yintercept = 0.5, color = "grey70", linewidth = 0.25) +
+  geom_vline(xintercept = 0.5, color = "grey70", linewidth = 0.25) +
+  geom_point(alpha = 0.9) +
+  geom_text_repel(aes(label = city_label), size = 2.7, max.overlaps = Inf) +
+  scale_color_manual(values = type_palette, drop = FALSE) +
+  scale_size_area(max_size = 6, labels = label_number(accuracy = 0.01)) +
+  labs(
+    title = "B. Spatial and topology controls",
+    subtitle = "距离、端点相似性和 degree-label association 不强，但必须控制。",
+    x = "Distance-only same-label AUC",
+    y = "Node-similarity same-label AUC",
+    color = "City type",
+    size = "Degree-label eta2"
+  ) +
+  base_theme +
+  theme(legend.position = "none")
+
+p_redundancy | p_space
+```
+
+Endpoint redundancy 是 WashingtonDC 和 Sydney 必须控制的问题。这并不否定 edge_attr，但要求更严格的 ablation：比较 endpoint-only、endpoint+distance、endpoint+degree、endpoint+relation bits、endpoint+full edge_attr。空间控制也必要，因为若干城市中仅用距离就能达到非零的 same-label AUC。
+
+# 城市类型划分
+
+当前城市类型划分应指导下一轮 V4 构图。更合理的做法不是把所有城市都当成同质 benchmark，而是让不同城市承担不同诊断角色。
+
+```{r city-table}
+city_summary <- city_types |>
+  select(city, city_label, typology, main_reasons) |>
+  left_join(priority |> select(city, exploration_priority, edge_probe_gain, edge_probe_perm_drop), by = "city") |>
+  arrange(desc(exploration_priority)) |>
+  mutate(
+    role_cn = recode(
+      typology,
+      "anchor candidate" = "主线 anchor",
+      "edge-rich but label-limited" = "edge 强但标签受限",
+      "label-rich but edge-weak" = "标签充分但 edge 弱",
+      "projection-risk diagnostic" = "投影风险诊断",
+      "secondary diagnostic" = "次级诊断候选",
+      "low-priority or negative control" = "低优先级 / 负对照"
+    ),
+    next_use = case_when(
+      city == "washingtondc" ~ "主模型与 ablation anchor",
+      city == "singapore" ~ "优先做 V4，但不能单独作主结果",
+      city %in% c("tokyo", "paris") ~ "保留为 label-rich 对照",
+      city %in% c("shanghai", "boston") ~ "用于 projection-risk stress test",
+      typology == "secondary diagnostic" ~ "进入 V4 smoke test 候选",
+      TRUE ~ "暂不优先投入"
+    )
+  ) |>
+  transmute(
+    城市 = city_label,
+    诊断角色 = role_cn,
+    下一步用途 = next_use,
+    `Edge gain` = number(edge_probe_gain, accuracy = 0.001),
+    `Perm drop` = number(edge_probe_perm_drop, accuracy = 0.001)
+  )
+
+kable(city_summary, format = "pipe", align = "l")
+```
+
+# 后续实验建议
+
+下一步实验应把这些诊断因素转化为可证伪的 control。
+
+| 因素 | 立即可做的 control / test | 用途 |
+|---|---|---|
+| 数据 / 标签口径 | 每个城市报告 known-label ratio、entropy、dominant class | 避免对弱标签城市过度解释 |
+| 图投影构建 | 改变 entity cap、local top-k、geometry fallback | 区分语义边和 projection artifact |
+| 城市形态 | 按 building-area tail、plot area、density proxy 分层 | 检验形态是否调节 edge usefulness |
+| 任务标签错配 | 增加 label-pair 和 heterophily probe | 避免把功能性跨类边误判为失败 |
+| 类别 / 度基线 | 对比 node-label baseline 和 edge-endpoint baseline | 量化超越平凡类别结构的真实 lift |
+| 空间混杂 | 加 endpoint+distance 与 spatial block split | 检验 edge_attr 是否超越 geography |
+| Endpoint 冗余 | 用 endpoint features 预测 edge_attr；消融冗余特征 | 检验独立 edge 信息 |
+| Relation 粒度 | 做 relation-specific probe 和 relation-drop ablation | 找出真正有用的 relation type |
+| Topology-degree 混杂 | 加 endpoint+degree control 和 degree-preserving rewiring | 检验 graph position 是否解释增益 |
+
+# 结论
+
+当前最强的结论不是“所有 Urban 城市图都同样有意义”。更强、也更适合写成论文的结论是：Urban graph validity 是**有条件的**。有些城市提供可用 edge semantics，有些城市暴露 label 或 projection 限制，有些城市则揭示了 same-label clustering probe 会低估的 heterophilous urban relations。这个数据集是有价值的，但应被定位为跨城市诊断研究，而不是简单 benchmark。

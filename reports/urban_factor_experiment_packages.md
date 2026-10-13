@@ -1,0 +1,206 @@
+# Urban 3-Factor Experiment Packages
+
+**核心结论。** 全 13 个 Urban
+城市的三类诊断已经跑通，且没有城市级失败。当前结果更支持"Urban
+是可用于构图机制研究和数据筛选的数据源"，而不是"所有城市都能直接作为主
+GNN 聚类实验的正例"。因此下一步应把城市分成 main anchor、candidate after
+V4、negative control、projection-risk diagnostic 和 not recommended
+五类，再决定哪些城市进入主模型 ablation。
+
+# 1. 这组实验回答什么问题
+
+本报告把 Urban 数据的可用性问题拆成三个一级因素：**label/data**、**graph
+projection** 和 **urban form**。这种拆分的目的不是证明某个 GNN
+主模型已经有效，而是先证明"边是否有机会承载独立、可解释、可重复的城市语义"。如果一个城市只是在原始标签比例、投影规则或距离密度上显得有效，它不应直接进入主模型
+ablation。
+
+本次执行固定为 CPU 诊断：Python 使用
+`/home/aitx/miniconda3/envs/gnn/bin/python`，R 使用
+`conda run -n r Rscript`，并强制 `CUDA_VISIBLE_DEVICES=''`。派生 graph
+dataset 写到外部数据目录，避免污染 repo 内 `data/`。
+
+  -------------------------------------------------------------------------------------------------------------------------------
+  item         value
+  ------------ ------------------------------------------------------------------------------------------------------------------
+  城市范围     bangkok, beijing, boston, chicago, johannesburg, madrid, melbourne, paris, shanghai, singapore, sydney, tokyo,
+               washingtondc
+
+  seeds        0,1,2
+
+  max_edges    30000
+
+  结果目录     results/urban_factor_experiments
+
+  派生图目录   /mnt/e/wsl-project-data/edge-enhanced-unsupervised-graph-neural-network-clustering/data/urban_factor_experiments
+  -------------------------------------------------------------------------------------------------------------------------------
+
+  : Run scope and path policy.
+
+# 2. 三类一级因素的实验设计
+
+**Label/data 实验包**检查同一个图在标签口径改变后是否仍然稳定。label
+downsampling 测试已知标签覆盖率降低时 edge gain
+是否剧烈波动；class-balanced probe 检查 same-label / different-label 或
+label-pair 组成是否主导结论；coarse label probe 检查原始 top-1 land-use
+是否过细，导致有意义的功能边被 same-label 任务低估。
+
+**Graph projection 实验包**检查边是不是由构图规则人工制造出来的。v3b
+relation intervention 逐一删除 street、junction、geom、building
+关系，并将 relation bits 清零；edge_attr permutation
+检查边属性是否真的被模型使用；V4 sweep 用更局部的 semantic projection 和
+geom-only control 判断语义边是否优于纯空间近邻。
+
+**Urban-form 实验包**检查城市形态是否解释了 edge signal。within-city
+stratification 按 plot area、building count、street count、building area
+mean 和 centroid distance 分层；matched-edge probe 在
+distance、degree、plot-area gap、node feature L2 上粗匹配；tile-level
+summary 把城市切成固定网格，观察 local density、label coverage 和
+same-label lift proxy。
+
+# 3. 图表解读
+
+Figure 11 说明 label/data 控制是否改变结论。若 downsampling
+热图在同一城市内颜色变化很大，说明 label coverage 足以左右 edge 结论；若
+balanced 曲线与 original full labels 明显分离，说明类别组成正在影响
+same-label probe；若 coarse label 明显强于 original top-1，说明原始
+label 粒度可能与聚类任务不完全一致。
+
+::: figure
+`<img src="../results/urban_factor_experiments/figures/fig_11_label_data_controls.png" alt="Figure 11. Label/data controls." width="100%" />`{=html}
+<p class="caption">
+Figure 11. Label/data controls.
+</p>
+:::
+
+Figure 12 说明 projection rule 是否稳定。Relation ablation delta
+大，表示某一类边的加入或删除会显著改变结论；permuted edge-attr dataset
+接近 original，表示 edge_attr 可能没有被稳定使用；V4 sweep 中若
+geom-only 接近或超过 semantic
+variants，则城市结果可能被空间几何混杂解释。
+
+::: figure
+`<img src="../results/urban_factor_experiments/figures/fig_12_projection_controls.png" alt="Figure 12. Projection controls." width="100%" />`{=html}
+<p class="caption">
+Figure 12. Projection controls.
+</p>
+:::
+
+Figure 13 说明城市形态是否是中介变量或混杂变量。Stratified gain range
+大，表示 edge signal 只在特定密度或异质性区间出现；matched point
+落到接近零，说明原始 edge gain 可能被距离、度或 plot-area gap
+解释；tile-level lift 分布能帮助定位哪些局部片区贡献了 city-level 结果。
+
+::: figure
+`<img src="../results/urban_factor_experiments/figures/fig_13_urban_form_controls.png" alt="Figure 13. Urban-form controls." width="100%" />`{=html}
+<p class="caption">
+Figure 13. Urban-form controls.
+</p>
+:::
+
+Figure 14
+是最终诊断矩阵。它不是模型排行榜，而是城市进入下一阶段主实验的风险标注：main
+anchor 可作为主结果候选；candidate after V4 需要先用 V4
+构图修正；negative control 适合作为反例；projection-risk diagnostic
+适合专门研究投影规则；not recommended 暂不建议进入主模型 ablation。
+
+::: figure
+`<img src="../results/urban_factor_experiments/figures/fig_14_city_decision_matrix.png" alt="Figure 14. City decision matrix." width="100%" />`{=html}
+<p class="caption">
+Figure 14. City decision matrix.
+</p>
+:::
+
+# 4. 逐城市证据摘要
+
+下面的表按城市合并三类证据。阅读方式很直接：如果 label/data
+项为"是"，先不要把该城市的 edge gain 解释为真实边语义；如果 projection
+项为"是"，需要优先检查构图规则；如果 urban-form
+项显示"匹配后仍稳定=是"，该城市才更支持独立 edge semantics。
+
+  ---------------------------------------------------------------------------------------------------
+  城市           建议分组          Label/data 证据      Projection 证据             Urban-form 证据
+  -------------- ----------------- -------------------- --------------------------- -----------------
+  Bangkok        negative control  downsample不稳=是;   edge_attr未被稳定使用=是;   形态介导=是;
+                                   类别敏感=是;         投影规则敏感=是;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=否                 匹配后仍稳定=否
+
+  Beijing        negative control  downsample不稳=是;   edge_attr未被稳定使用=是;   形态介导=是;
+                                   类别敏感=否;         投影规则敏感=否;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=否                 匹配后仍稳定=是
+
+  Boston         negative control  downsample不稳=是;   edge_attr未被稳定使用=是;   形态介导=是;
+                                   类别敏感=是;         投影规则敏感=是;            匹配后消失=否;
+                                   粗粒度增强=是        几何混杂=是                 匹配后仍稳定=否
+
+  Chicago        negative control  downsample不稳=是;   edge_attr未被稳定使用=是;   形态介导=是;
+                                   类别敏感=否;         投影规则敏感=否;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=否                 匹配后仍稳定=否
+
+  Johannesburg   negative control  downsample不稳=是;   edge_attr未被稳定使用=是;   形态介导=是;
+                                   类别敏感=是;         投影规则敏感=是;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=是                 匹配后仍稳定=否
+
+  Madrid         negative control  downsample不稳=是;   edge_attr未被稳定使用=是;   形态介导=是;
+                                   类别敏感=否;         投影规则敏感=否;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=是                 匹配后仍稳定=否
+
+  Melbourne      candidate after   downsample不稳=是;   edge_attr未被稳定使用=否;   形态介导=是;
+                 V4                类别敏感=是;         投影规则敏感=否;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=否                 匹配后仍稳定=否
+
+  Paris          negative control  downsample不稳=是;   edge_attr未被稳定使用=是;   形态介导=是;
+                                   类别敏感=是;         投影规则敏感=否;            匹配后消失=否;
+                                   粗粒度增强=是        几何混杂=否                 匹配后仍稳定=否
+
+  Shanghai       projection-risk   downsample不稳=是;   edge_attr未被稳定使用=否;   形态介导=是;
+                 diagnostic        类别敏感=否;         投影规则敏感=否;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=是                 匹配后仍稳定=是
+
+  Singapore      projection-risk   downsample不稳=是;   edge_attr未被稳定使用=否;   形态介导=是;
+                 diagnostic        类别敏感=否;         投影规则敏感=是;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=是                 匹配后仍稳定=是
+
+  Sydney         negative control  downsample不稳=是;   edge_attr未被稳定使用=是;   形态介导=是;
+                                   类别敏感=是;         投影规则敏感=否;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=是                 匹配后仍稳定=否
+
+  Tokyo          negative control  downsample不稳=是;   edge_attr未被稳定使用=是;   形态介导=是;
+                                   类别敏感=否;         投影规则敏感=否;            匹配后消失=否;
+                                   粗粒度增强=否        几何混杂=否                 匹配后仍稳定=否
+
+  WashingtonDC   projection-risk   downsample不稳=是;   edge_attr未被稳定使用=否;   形态介导=是;
+                 diagnostic        类别敏感=是;         投影规则敏感=是;            匹配后消失=否;
+                                   粗粒度增强=是        几何混杂=是                 匹配后仍稳定=是
+  ---------------------------------------------------------------------------------------------------
+
+  : City-level evidence summary across the three factor packages.
+
+# 5. 城市分组建议
+
+  decision_group                 n_cities
+  ---------------------------- ----------
+  negative control                      9
+  projection-risk diagnostic            3
+  candidate after V4                    1
+
+  : Final city grouping counts.
+
+**main anchor** 城市是后续主模型 ablation
+的优先候选，因为它们在匹配控制后仍保留 edge signal，且没有明显 label 或
+projection 风险。**candidate after V4**
+城市不是不可用，而是需要先用更局部的 V4 构图和 label
+粒度控制重新确认。**negative control**
+城市对论文同样重要，因为它们能证明方法不是在任何城市上都声称有效。**projection-risk
+diagnostic**
+城市适合写成数据构图机制分析，而不是直接当作主模型胜利案例。**not
+recommended** 城市暂时不应进入主实验，除非后续数据和构图质量明显改善。
+
+# 6. 失败与剩余风险
+
+    ## No package/city failures were recorded.
+
+这些实验仍然是数据层和 edge-level probe，不是主 GNN clustering
+结果。它们能判断 Urban 城市图是否值得进入主模型实验，但不能单独证明新
+GNN 算法优于现有聚类方法。下一步应把 main anchor 和 candidate after V4
+分开：前者进入小规模主模型 ablation，后者先扩大 V4
+构图搜索并加入外部地形、河流、道路等级、行政边界和经济密度变量。
