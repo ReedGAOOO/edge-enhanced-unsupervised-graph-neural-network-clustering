@@ -34,9 +34,8 @@ Notes:
   https://data.pyg.org/whl/torch-2.8.0+cu129.html. torch is pinned to 2.8.0 so
   it matches the torch-scatter pt28 wheel (torch 2.12 + scatter pt28 aborts with
   std::bad_alloc on import). `--torch-backend cu129` is required for the sync.
-- Project data lives on the SN730 drive (currently F:):
-  /mnt/f/WSL Projects Data/edge-enhanced-unsupervised-graph-neural-network-clustering/data
-  The repo-local data/ mount currently points at an empty folder on D:, so pass
-  --root_path explicitly until the mount is fixed.
+- Project data: repo-local data/ is an fstab bind mount of
+  /mnt/d/WSL Projects Data/home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/data
+  (populated 2026-10-13; see DATA_ASSETS.md). The default --root_path data works.
 - The old urbanity conda and Poetry locks are retained only as text backups.
 

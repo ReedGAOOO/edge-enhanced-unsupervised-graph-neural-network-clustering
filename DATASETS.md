@@ -2,9 +2,9 @@
 
 This file describes the datasets that currently exist under `data/` in this repo, with emphasis on what is actually useful for experiments now.
 
-> **Location (2026-10).** The prepared datasets live on the SN730 drive, currently
-> `/mnt/f/WSL Projects Data/edge-enhanced-unsupervised-graph-neural-network-clustering/data`.
-> The repo-local `data/` mount points at an empty folder on D:, so pass `--root_path` explicitly.
+> **Location.** `data/` is an fstab bind mount of the D: mirror folder
+> `/mnt/d/WSL Projects Data/home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/data`
+> (populated 2026-10-13 from the F: copy). See `DATA_ASSETS.md` for locations, backups and verification.
 >
 > **Classic floors.** `tools/run_classic_baselines.py` reports KMeans(X), spectral(A), Louvain(A) and SGC(A,X)+KMeans
 > for any dataset here. Check a dataset against these before reading anything into a deep-model number

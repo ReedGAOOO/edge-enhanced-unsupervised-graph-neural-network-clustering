@@ -121,9 +121,8 @@ and cold start; known-only labels).
 uv venv --python 3.11 .venv
 uv pip sync --python .venv/bin/python --torch-backend cu129 requirements.uv.lock.txt
 
-DATA="/mnt/f/WSL Projects Data/edge-enhanced-unsupervised-graph-neural-network-clustering/data"
 # one run with the converged defaults (2000 epochs, hid 512); add --warm_start auto via main.py for weak-feature graphs
-.venv/bin/python tools/run_preset.py --preset b45_v31_msgcond_gs050 --dataset cora --root_path "$DATA" --seed 0 --gpu 0
+.venv/bin/python tools/run_preset.py --preset b45_v31_msgcond_gs050 --dataset cora --seed 0 --gpu 0
 .venv/bin/python tools/run_preset.py --list_presets   # baseline_v1, b31_dualscalar_assign, b45_v31_msgcond_gs050
 ```
 
@@ -132,7 +131,7 @@ See `UV_ENVIRONMENTS.txt` for why torch is pinned to 2.8.0.
 ## Reproducing the breakthrough pass
 
 ```bash
-DATA=/path/without/spaces/to/data   # symlink to the SN730 data folder
+DATA=data
 # synthetic benchmark (writes synth_ctx_v1_* into $DATA)
 .venv/bin/python tools/prepare_synth_ctx_datasets.py --root_path "$DATA" --feature_sep 0.35 --homophily 0.45,0.55
 # classic floors
@@ -152,9 +151,8 @@ an over-committed GPU pages to host memory instead of raising OOM and every job 
 
 ## Dataset Guide (Type, Location, Commands)
 
-Data is expected under `--root_path` (default `data/`). The prepared datasets currently live on the SN730 drive at
-`/mnt/f/WSL Projects Data/edge-enhanced-unsupervised-graph-neural-network-clustering/data`; the repo-local `data/`
-mount points at an empty folder on D:, so pass `--root_path` explicitly (a space-free symlink to that folder is convenient).
+Data is expected under `--root_path` (default `data/`). `data/` is an fstab bind mount of a D: mirror folder; see
+`DATA_ASSETS.md` for the physical location, the F: backup and verification.
 
 For a concise inventory of what each current dataset means, see [DATASETS.md](DATASETS.md).
 
