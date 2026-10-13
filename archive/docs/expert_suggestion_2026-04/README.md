@@ -1,3 +1,8 @@
+> **Retired 2026-10-13.** Both directions were re-tested with a trained backbone on `synth_ctx_v1`, a benchmark built to
+> reward context-dependent edges. Expert1 (contextual edge state, EP1): no contextual effect (+0.003/+0.006 NMI) and
+> the context-off ablation is just as good. Expert2 (relation state, EP2/B50): every run collapses to a single
+> cluster after warm start. See `results/breakthrough_v1/e2_synth_ctx_warm/mechanism_table.md` and the README.
+
 # Expert Suggestion
 
 This folder keeps the currently active expert guidance used for ongoing model iterations.

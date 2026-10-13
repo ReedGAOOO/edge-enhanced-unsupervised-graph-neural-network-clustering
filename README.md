@@ -1,280 +1,162 @@
 # Edge Enhanced Unsupervised Graph Neural Network Clustering
 
-Unsupervised graph clustering built on DSE/LSEnet, with edge-aware variants centered on structural entropy (SE).
+Unsupervised graph clustering built on DSE/LSEnet (Lorentz structural entropy), with edge-aware variants. The
+question the project asks: when do edge attributes help structural-entropy clustering, and which model actually uses them?
 
-## Current Mainline
+## Status (2026-10-13): breakthrough pass
 
-- Default mainline: `B45` (`b45_v31_msgcond_gs050`)
-- Reference SE-consistent branch: `G20` (`g20_se_consistent_main`)
-- Minimal edge-aware ablation: `B31` (`b31_dualscalar_assign`)
-- Conservative message variant: `B47` (`b47_v31_msgcond_gs050_matchonly`)
-- Baseline: `V1` (`baseline_v1`)
+Everything before this pass was measured on a backbone that had not been trained. The pass fixed the backbone,
+rebuilt the synthetic benchmark, re-ran the surviving models and retired the rest. Results live in
+`results/breakthrough_v1/` (plans in `configs/breakthrough/`); the pre-pass README is archived at
+`archive/docs/README_2026-04_snapshot.md` and its numbers should not be cited.
 
-`tools/run_preset.py` now defaults to `b45_v31_msgcond_gs050`.
-`configs/presets/` now keeps only the active top-level presets; older branch presets live under `archive/configs/historical_presets/` and can still be loaded by explicit path.
-Current expert guidance used for ongoing iteration lives under [`Expert suggestion/`](</home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/Expert suggestion/README.md>).
+### What was wrong
 
-`B45` is the current mainline because it changes the baseline at the three highest-leverage points without rewriting the structural-entropy objective itself: it keeps the original scalar SE loss, adds dual scalar edge weights for `adj_msg/adj_si`, preserves the calibrated `V31` assignment residual, and further introduces edge-conditioned message passing at the leaf encoder so that `edge_attr` can directly reshape the message graph before the partition tree is grown. Compared with the baseline, this is the first version in the repo that uses edge information simultaneously in representation learning, assignment, and SE-consistent structure weighting while still staying numerically stable through bounded gates, graph re-normalization, and the unchanged `_si_loss()` trunk.
+1. **The backbone was never trained.** All earlier runs used 60-120 epochs and `hid_dim` 128-256 against a reference
+   config of 2000 epochs / 512. Training loss moved <1%, and partitions were close to random (Urban conductance 0.98,
+   modularity 0.005). B45's "wins" were mostly one lucky seed escaping a degenerate start.
+2. **The synthetic suite could not test edges.** On `synth_mech_full_v1` / `synth_edgectrl_v1`, KMeans on node features
+   alone gives NMI 1.000 on every graph, and edge channel 0 is a noisy copy of the pairwise same-label bit.
+3. **Urban labels were scored with `unknown` as a class** (84% of plots in WashingtonDC/Boston). With known-only labels,
+   every classic method scores NMI 0.02-0.07 on Urban while Louvain finds communities with modularity 0.90+: land-use labels
+   are unrelated to the graph's community structure.
+4. **No floors.** Plain spectral clustering reaches 0.728 on DBLP, where the old B45 scored 0.170.
 
-## Quick Start
+### What changed
+
+- **Converged budget**: 1000-2000 epochs, `hid_dim` 512, `w_decay` 0, `temperature` 1.0, 3 decode trials (now the
+  `tools/run_preset.py` defaults).
+- **Warm start + dual-start selection** (`--warm_start auto`, `utils/warm_start.py`). On weak-feature graphs the Lorentz
+  soft assignment sits on a balanced, graph-agnostic plateau: its loss stays above the SE of a *random* hard partition while
+  spectral clustering finds a far lower one (`e2d_plateau_diag`; higher lr, smaller `hid_dim`, wider `max_nums` and S²X input
+  features all stay stuck). The warm start pre-trains the leaf assignment on spectral(A) or SGC(A,X)+KMeans, whichever has
+  lower 2-level SE. Because a mediocre pseudo partition can also trap a backbone that would have escaped on its own (Cora),
+  each configuration is trained with and without warm start and the run with the lower final SE loss is kept. No step uses labels.
+- **Known-only evaluation is the default** (`--no-known_only_eval` restores the old behaviour).
+- **New synthetic benchmark** `synth_ctx_v1` (`tools/prepare_synth_ctx_datasets.py`): weak features (KMeans 0.22),
+  homophily 0.45 (below the topology-only detection threshold) and 0.55, and edge channel 0 in three modes: `none`,
+  `direct` (context-free signal), `contextual` (sign flips with a latent endpoint role, so it is useless without endpoint context).
+- **Classic floors** for every dataset (`tools/run_classic_baselines.py`).
+
+### Evidence
+
+**E1, backbone gate** (`e1_backbone_gate`, seed 0). Cora baseline NMI 0.237 → 0.421 and modularity 0.24 → 0.735 once
+trained; B45 0.450. The released DSE code reaches 0.39 on Cora (best-of-eval, 1500 epochs), so the paper's 0.640 is not
+reproducible from public code and is no longer a target.
+
+**E2, does a model use edges?** (`e2_synth_ctx_warm`, 3 seeds, warm start throughout because the cold baseline is stuck
+on this benchmark). Effects are NMI differences between graphs that share topology, features and labels: *arch* =
+permEA − baseline, *descr* = none − permEA (aligned nuisance channels such as endpoint feature cosine), *direct eff* =
+direct − none, *context eff* = contextual − none. EP2 is absent: all six runs collapsed to a single cluster after warm
+start (ACC 25%, NMI 0.00) and were stopped at epoch 600-1100.
+
+| h | model | permEA | none | direct | contextual | arch | descr | direct eff | context eff |
+|---|---|---|---|---|---|---|---|---|---|
+| h45 | baseline (no edges) | | 0.084±0.002 | | | | | | |
+| h45 | SGC2+KMeans / oracle | | 0.472±0.001 | 0.855±0.000 | 0.839±0.000 | | | | |
+| h45 | b45 | 0.088±0.020 | 0.362±0.012 | 0.729±0.008 | 0.357±0.016 | +0.004 | +0.274 | +0.367 | -0.005 |
+| h45 | ep1_ctx | 0.094±0.012 | 0.091±0.006 | 0.093±0.012 | 0.096±0.003 | +0.010 | -0.003 | +0.002 | +0.006 |
+| h45 | ep1_noctx | — | — | 0.099±0.010 | 0.101±0.007 | — | — | — | — |
+| h55 | baseline (no edges) | | 0.602±0.006 | | | | | | |
+| h55 | SGC2+KMeans / oracle | | 0.727±0.001 | 0.944±0.000 | 0.957±0.000 | | | | |
+| h55 | b45 | 0.503±0.013 | 0.637±0.009 | 0.914±0.013 | 0.631±0.007 | -0.099 | +0.133 | +0.278 | -0.006 |
+| h55 | ep1_ctx | 0.619±0.005 | 0.626±0.012 | 0.695±0.005 | 0.628±0.004 | +0.017 | +0.006 | +0.070 | +0.003 |
+| h55 | ep1_noctx | — | — | 0.710±0.014 | 0.614±0.007 | — | — | — | — |
+
+- **B45 uses context-free edge semantics strongly** (+0.37 / +0.28, close to the oracle-weighted SGC) **and cannot use
+  contextual semantics at all** (−0.005).
+- **B45 is hurt by uninformative edges**: with shuffled edge attributes it loses 0.10 against the edge-free baseline at h55.
+- **EP1's context conditioning does nothing**: contextual effect ≈ 0, and the context-off ablation is as good or better.
+- No model uses contextual edges, although the oracle shows 0.84-0.96 NMI is available. This remains open.
+- The DSE baseline trails SGC2+KMeans on these weak-feature graphs (0.60 vs 0.73 at h55, 0.08 vs 0.47 at h45).
+
+**E3, real graphs** (`e3_real_dual`; 3 seeds for Cora/DBLP, 1 for the rest; selection = lower final SE loss between warm
+and cold start; known-only labels).
+
+| dataset | old B45 (60 ep) | kmeans_x | spectral_a | louvain_a | sgc2_ax | baseline (SE-selected) | B45 (SE-selected) | baseline warm / nowarm | B45 warm / nowarm |
+|---|---|---|---|---|---|---|---|---|---|
+| cora | 0.164 | 0.043 | 0.202 | 0.447 (k=102) | 0.414 | 0.430±0.020 (nowarm) | 0.424±0.019 (nowarm) | 0.373±0.055 / 0.430±0.020 | 0.353±0.045 / 0.424±0.019 |
+| photo | 0.002 | 0.170 | 0.556 | 0.657 (k=151) | 0.416 | 0.637 (warm) | 0.004 (warm) | 0.637 / 0.215 | 0.004 / 0.002 |
+| dblp_magnn_author_v2 | 0.170 | 0.067 | 0.728 | 0.724 (k=5) | 0.515 | 0.759±0.002 (warm) | 0.667±0.014 (nowarm) | 0.759±0.002 / 0.664±0.034 | 0.738±0.012 / 0.667±0.014 |
+| entities_aifb | 0.082 | 0.126 | 0.129 | 0.546 (k=18) | 0.137 | 0.158 (warm) | 0.017 (warm) | 0.158 / 0.086 | 0.017 / 0.008 |
+| urban_paris_plot_v3bsjg | n/a | 0.049 | 0.023 | 0.039 (k=32) | 0.055 | 0.035 (warm) | 0.025 (warm) | 0.035 / 0.039 | 0.025 / 0.031 |
+
+- **The fixed backbone is the real gain**: 0.170 → 0.759 on DBLP (above spectral 0.728 and Louvain 0.724), 0.002 → 0.637
+  on Photo, 0.164 → 0.430 on Cora. On real graphs SE training improves on the warm-start partition (DBLP 0.727 → 0.759,
+  Photo 0.415 → 0.637, AIFB 0.130 → 0.158).
+- **B45 adds nothing on real graphs and collapses on Photo and AIFB** (0.004 / 0.017 with either start).
+- SE-based start selection picked the better start for the baseline wherever the starts differed clearly, but picked the
+  worse one for B45 on DBLP (0.667 vs 0.738).
+- No real dataset in the repo yet shows edge attributes helping clustering beyond topology and features.
+
+### Retired in this pass
+
+| Item | Why |
+|---|---|
+| All rankings from ≤120-epoch runs (B45 > B40 > G20, EP1/EP2 verdicts, Urban NMI) | Backbone untrained; see above |
+| `synth_mech_full_v1`, `synth_edgectrl_v1` as evidence; `tools/run_mechanism_synth_suite.py` (archived) | Features alone give NMI 1.0 |
+| EP1 (Expert1 contextual edge state) | E2: contextual effect ≈ 0, context-off ablation as good |
+| EP2 (Expert2 relation state, B50) | E2: collapses to one cluster even with a warm start |
+| Expert3 shared-tree multi-channel prototype | Never beat its own early-scalarised ablation (e.g. 0.39 vs 0.86 on old h85); dense C×N×N adjacency |
+| Presets B40, B47, B48, G20 (moved to `archive/configs/historical_presets/`) | B40/B47 are minor B45 variants, B48 was harmful, G20's SE path is inside B45 |
+| `Expert suggestion/` (moved to `archive/docs/expert_suggestion_2026-04/`) | Both directions refuted |
+| Urban land-use NMI as clustering evidence | Labels unrelated to graph communities; Urban stays a data-paper track |
+| Paper-reported LSEnet numbers as targets | Not reproducible from the released code |
+
+### Open problems, in priority order
+
+1. **B45 robustness**: it collapses on Photo/AIFB and loses to the baseline when edges carry no signal. It needs a fallback
+   to identity edge weights when the edge channel is uninformative, and a diagnosis of the collapse.
+2. **Real-data evidence for edge attributes**: none yet. Either find graphs whose edge attributes carry information that
+   topology and features do not, or position the work as a mechanism study (synthetic positives, real negatives).
+3. **Contextual edge semantics**: a large oracle headroom that no current model reaches.
+4. **Backbone vs simple baselines**: DSE trails SGC+KMeans on weak-feature graphs, and SE training can drift away from a good
+   initial partition (h55: 0.73 → 0.60).
+5. **Start selection for edge-aware models**: B45's training loss is computed on its own reweighted graph, so comparing it
+   across starts (or against the baseline) needs a common criterion, e.g. 2-level SE of the final hard partition on the raw graph.
+
+## Quick start
 
 ```bash
-# 1) clone
-git clone https://github.com/ReedGAOOO/edge-enhanced-unsupervised-graph-neural-network-clustering.git
-cd edge-enhanced-unsupervised-graph-neural-network-clustering
+uv venv --python 3.11 .venv
+uv pip sync --python .venv/bin/python --torch-backend cu129 requirements.uv.lock.txt
 
-# 2) environment
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -U pip
-pip install -r requirements.txt
-
-# 3) default run (B45)
-python3 tools/run_preset.py --dataset cora --seed 0 --gpu 0
-
-# optional: explicit presets
-python3 tools/run_preset.py --preset b45_v31_msgcond_gs050 --dataset cora --seed 0 --gpu 0
-python3 tools/run_preset.py --preset g20_se_consistent_main --dataset cora --seed 0 --gpu 0
-python3 tools/run_preset.py --preset b31_dualscalar_assign --dataset cora --seed 0 --gpu 0
-python3 tools/run_preset.py --preset b47_v31_msgcond_gs050_matchonly --dataset cora --seed 0 --gpu 0
-python3 tools/run_preset.py --preset baseline_v1 --dataset cora --seed 0 --gpu 0
-
-# optional: show all preset names
-python3 tools/run_preset.py --list_presets
+DATA="/mnt/f/WSL Projects Data/edge-enhanced-unsupervised-graph-neural-network-clustering/data"
+# one run with the converged defaults (2000 epochs, hid 512); add --warm_start auto via main.py for weak-feature graphs
+.venv/bin/python tools/run_preset.py --preset b45_v31_msgcond_gs050 --dataset cora --root_path "$DATA" --seed 0 --gpu 0
+.venv/bin/python tools/run_preset.py --list_presets   # baseline_v1, b31_dualscalar_assign, b45_v31_msgcond_gs050
 ```
 
-## Structure Evolution: Baseline -> B31 -> B40 -> B45
+See `UV_ENVIRONMENTS.txt` for why torch is pinned to 2.8.0.
 
-### Current recommendation
+## Reproducing the breakthrough pass
 
-| Role | Preset | Meaning |
-|---|---|---|
-| Mainline | `b45_v31_msgcond_gs050` | strongest current control-suite model |
-| Reference branch | `g20_se_consistent_main` | SE-consistent scalar edge weighting |
-| Minimal ablation | `b31_dualscalar_assign` | no message gate / no hierarchy / no augment |
-| Conservative variant | `b47_v31_msgcond_gs050_matchonly` | `B45` + matched-edge-only gate |
-| Baseline | `baseline_v1` | no explicit edge-aware path |
-
-### Structural comparison
-
-| Item | Baseline (`V1`) | G20 (`V20`) | B45 (`V31 + msg-cond`) |
-|---|---|---|---|
-| Edge feature source | ignored in score path | scalarized from `edge_attr` | scalarized + direct message gate from `edge_attr` |
-| Main injection stage | node-only leaf encoding + trunk assignment | SE graph measure first (`adj_msg/adj_si` reweight) | leaf message graph + `V31` assignment residual + scalar SE weights |
-| Relation to SE objective | indirect | direct | direct, but without rewriting `_si_loss()` |
-| High-leverage edge path | none | structure reweight only | structure reweight + edge-conditioned message passing |
-| Why it stays stable | simplest path | bounded log-ratio + `edge_reg` | bounded message gate + degree re-normalization + `V31` stable trunk |
-| Internal interpretable stats | N/A | `edge_factor_mean/std`, `edge_reg` | `msg_gate_factor_mean/std`, `edge_factor_mean/std`, `graph_alpha`, `edge_reliability`, `edge_mix_beta` |
-| Key files | `modules/layers.py`, `modules/dsi.py` | `modules/dsi.py` | `modules/layers.py`, `modules/model.py`, `modules/dsi.py` |
-
-### Evolution diagram
-
-```text
-[Baseline / V1]
-  node-only leaf encoding
-  + trunk assignment
-  + scalar SE loss on adjacency
-        |
-        | add edge-aware scalar structure path
-        v
-[B31 / V31]
-  baseline
-  + dual scalar edge weights for adj_msg / adj_si
-  + V31 assignment residual
-  + calibrated graph_alpha / reliability / mix_beta
-        |
-        | move edge usage earlier into representation learning
-        v
-[B40 / V31 + msg-cond(0.35)]
-  B31
-  + edge-conditioned message passing on leaf graph
-  + edge_attr -> gate factor -> reweighted adj_msg -> LorentzConv
-        |
-        | strengthen message gate to effective range
-        v
-[B45 / V31 + msg-cond(0.50)]
-  B40
-  + stronger edge message gate
-  + same stable V31 assignment + scalar SE path
-        |
-        `-> optional conservative variant:
-            [B47 = B45 + matched-edge-only gate]
-
-Parallel reference branch:
-
-[G20 / V20]
-  baseline
-  + scalar SE-consistent edge weighting
-  + no explicit message-conditioned gate
+```bash
+DATA=/path/without/spaces/to/data   # symlink to the SN730 data folder
+# synthetic benchmark (writes synth_ctx_v1_* into $DATA)
+.venv/bin/python tools/prepare_synth_ctx_datasets.py --root_path "$DATA" --feature_sep 0.35 --homophily 0.45,0.55
+# classic floors
+.venv/bin/python tools/run_classic_baselines.py --root_path "$DATA" --datasets cora,photo,dblp_magnn_author_v2 \
+  --out_csv results/breakthrough_v1/e3_real_dual/classic_baselines.csv
+# experiment plans (parallel jobs on one GPU; finished runs are cached)
+for plan in e1_backbone_gate e2d_plateau_diag e2_synth_ctx_warm e3_real_dual; do
+  .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/$plan.json --root_path "$DATA" --max_parallel 4
+done
+.venv/bin/python tools/report_e2_mechanism.py
+.venv/bin/python tools/report_e3_real.py
 ```
 
-### Why B45 is the current mainline
-
-- It uses edge information at the three highest-leverage points:
-  - leaf message graph
-  - assignment score
-  - scalar SE graph
-- It keeps `_si_loss()` unchanged and therefore avoids destabilizing the structural entropy objective.
-- It wins over `G20` on the current full control suite (`9-grid × 3 seeds`) while keeping all required branches alive.
-
-### Current evidence
-
-Source:
-- `results/mainline_evidence/diagnostic_b45_confirm_grid9_v1/summary_by_condition.csv`
-- `results/mainline_evidence/diagnostic_b45_confirm_grid9_v1/summary_by_condition_dataset.csv`
-- `results/mainline_evidence/diagnostic_b47b48_repr3_v1/summary_by_condition.csv`
-
-`9-grid × 3 seeds` overall `NMI / ARI`:
-
-| Condition | NMI mean | ARI mean |
-|---|---:|---:|
-| `b45_v31_msgcond_gs050` | `0.16001` | `0.15256` |
-| `b40_v31_msgcond` | `0.14575` | `0.13826` |
-| `g20_se_consistent_main` | `0.11657` | `0.10914` |
-
-Homophily-wise:
-
-- `h45`: `B45` is not clearly better than `G20`
-- `h65`: `B45` becomes slightly better than `G20`
-- `h85`: `B45` is clearly stronger than both `B40` and `G20`
-
-Mode-wise:
-
-- `mhier`: `B45 > B40 > G20`
-- `mmisl`: `B45 > B40 > G20`
-- `mredu`: `B45 > B40 > G20`
-
-Small follow-up on `h65` (`B47/B48`):
-
-- `B47 = B45 + matched-edge-only` gives only a very small gain over `B45`
-- `B48 = B45 + confidence gate` is harmful
-
-So the current message-branch ordering is:
-
-1. `B45`
-2. `B47`
-3. `G20`
-4. `B40`
-5. `B48`
-
-### Minimal dataflow summary
-
-```text
-Baseline / V1
-  node features -> Lorentz leaf encoder -> trunk assignment -> scalar SE loss
-
-G20 / V20
-  edge_attr -> scalar edge factors -> reweighted adj_msg/adj_si -> trunk assignment -> scalar SE loss
-
-B45 / V31 + msg-cond
-  edge_attr -> message gate -> reweighted leaf message graph
-          +-> dual scalar edge factors for adj_msg/adj_si
-          +-> calibrated V31 assignment residual
-  -> partition tree -> unchanged scalar SE loss
-```
-
-For the full experimental trail from `Baseline -> B31 -> B40 -> B45 -> B47/B48`, see `archive/docs/deep-research-report.md`.
-
-## Recent EP1 / EP2 Evaluation (2026-04-16)
-
-For the most recent expert-driven follow-up, we relabeled the two exploratory branches as:
-
-- `EP1`: the former Expert1 contextual edge-state branch (`V40A` family)
-- `EP2`: the former Expert2 relation-state branch (`B50 / V40 relation-state` family)
-
-These names are evaluation labels for the latest comparison run. They are **not** promoted mainline presets.
-
-### Why this comparison was split by edge-semantic credibility
-
-Not all datasets in this repo carry equally trustworthy edge semantics:
-
-- `highest`: synthetic control graphs where edge semantics are explicitly generated and can be permuted for causal checks
-- `high`: native or natively modeled semantic-edge graphs such as later Urban `V3b` builders and `DBLP v2`
-- `medium`: real relation graphs with partial-label evaluation noise (`AIFB`)
-- `low`: common benchmarks such as `cora/photo` where `edge_attr` is derived from node features and degrees rather than provided natively
-
-This matters because a branch can look acceptable on derived or synthetic edges while still failing to generalize on real contextual relations.
-
-### Evaluation matrix
-
-The April 16, 2026 comparison used:
-
-- synthetic control + permutation pairs:
-  - `synth_mech_full_v1_h85_s90_ds00`
-  - `synth_mech_full_v1_h65_s90_ds00`
-  - `synth_mech_full_v1_h45_s00_ds00`
-  - plus their `permEA` counterparts
-- high-credibility native-modeled urban graphs:
-  - `urban_paris_plot_v3bsjg`
-  - `urban_boston_plot_v3bsjg`
-  - `urban_bangkok_plot_v3bsjg`
-- high-credibility native multi-relation graph:
-  - `dblp_magnn_author_v2`
-- medium-credibility partial-label KG graph:
-  - `entities_aifb`
-- low-credibility derived-edge sanity checks:
-  - `cora`
-  - `photo`
-
-Local result artifacts from this run are stored under:
-
-- `results/mainline_evidence/ep_compare_v1/dataset_catalog.csv`
-- `results/mainline_evidence/ep_compare_v1/summary_by_dataset_model.csv`
-- `results/mainline_evidence/ep_compare_v1/summary_by_group_model.csv`
-- `results/mainline_evidence/ep_compare_v1/leaderboard_by_dataset.csv`
-
-### Group-level summary (`NMI mean`)
-
-| Group | Edge semantics | `B45` | `EP1` | `EP2` | Reading |
-|---|---|---:|---:|---:|---|
-| `synthetic_control` | explicit synthetic edge semantics | `0.1309` | `0.0490` | `0.0072` | `B45` remains clearly strongest |
-| `synthetic_control_perm` | synthetic permutation stress | `0.0765` | `0.0493` | `0.0085` | only `B45` shows a large semantic drop |
-| `urban_v3b_native` | later Urban `V3b` native-modeled relations | `0.0146` | `0.0093` | `0.0086` | all branches are weak; `B45` still leads |
-| `native_multirelation` | native bibliographic relations (`DBLP v2`) | `0.1703` | `0.1206` | `0.0028` | `EP1` has partial signal, but not enough |
-| `native_multirelation_partial_label` | native KG relations with noisy clustering eval | `0.0819` | `0.0658` | `0.0802` | not decisive because labels are sparse |
-| `derived_generic` | non-native derived edge features | `0.0830` | `0.0704` | `0.0045` | sanity only; not evidence of semantic generalization |
-
-### Main takeaways
-
-- `B45` remains the only branch with strong evidence that it is actually using edge semantics rather than merely tolerating them.
-- On the highest-signal synthetic condition (`h85`), `B45` still dominates:
-  - `B45 = 0.3781`
-  - `EP1 = 0.1332`
-  - `EP2 = 0.0080`
-- On the paired permutation stress test for the same graph:
-  - `B45` drops from `0.3781` to `0.2146`
-  - `EP1` stays nearly unchanged (`0.1332 -> 0.1342`)
-  - `EP2` stays nearly unchanged (`0.0080 -> 0.0082`)
-
-This pattern is important: the large `B45` drop is evidence that it really depends on edge semantics, whereas the near-flat `EP1/EP2` behavior suggests they still do not stably exploit the edge channel.
-
-- On later Urban `V3b` graphs, all three models remain weak. This is the most important failure case because these are high-credibility, context-sensitive relations rather than synthetic edges.
-- On `DBLP v2`, `EP1` is better than it is on Urban graphs and reaches `0.1206` `NMI`, which suggests that explicit edge-role modeling may have some value on native multi-relation graphs. However, it still trails `B45 = 0.1703` by a clear margin.
-- `EP2` remains unsupported by current evidence. It is weak on synthetic control, weak on Urban `V3b`, and nearly collapsed on `DBLP v2`.
-
-### Current interpretation
-
-The repo's main open problem is still unchanged:
-
-- we know that edge semantics can help
-- we do **not** yet have a branch that is both strongly edge-using and reliably generalizable on real contextual relations
-
-As of the 2026-04-16 evaluation, the practical ordering is:
-
-1. `B45` as the mainline
-2. `EP1` as an exploratory branch worth keeping only for further controlled ablations
-3. `EP2` as an exploratory branch without current promotion evidence
-
-### Notes on excluded / low-priority results
-
-- `fraud_yelp_homo` was not used as a headline result in this comparison:
-  - the task is structurally mismatched with community-style clustering
-  - the rerun also failed to produce valid metrics in this matrix
-- `cora/photo` are kept only as low-credibility sanity checks because their `edge_attr` is derived rather than native
+`e2_synth_ctx_warm` runs EP1/EP2 from copies of the archived expert workspaces under `results/breakthrough_v1/_code/`
+(the copies add the warm start through an encoder hook). Keep `--max_parallel` at 4 for graphs above ~5k nodes: under WSL
+an over-committed GPU pages to host memory instead of raising OOM and every job slows to a crawl.
 
 ## Dataset Guide (Type, Location, Commands)
 
-All data is expected under repo-local `data/` (default `--root_path data`).
+Data is expected under `--root_path` (default `data/`). The prepared datasets currently live on the SN730 drive at
+`/mnt/f/WSL Projects Data/edge-enhanced-unsupervised-graph-neural-network-clustering/data`; the repo-local `data/`
+mount points at an empty folder on D:, so pass `--root_path` explicitly (a space-free symlink to that folder is convenient).
+
+For a concise inventory of what each current dataset means, see [DATASETS.md](DATASETS.md).
 
 ### 1) Auto-download datasets (no manual file placement)
 
@@ -325,6 +207,25 @@ python3 tools/prepare_urban_plot_graph_v3b.py --city beijing --urban_root data/u
 
 # batch-build all cities and all V3b variants
 python3 tools/run_urban_plot_graph_v3b_series.py --force --summary_dir results/data_construction_series/urban_plot_v3b_series
+
+# new plot-centric heterogeneous urban dataset
+# node types:
+# - plot, street, intersection, building
+# typed relations:
+# - plot-plot via shared streets
+# - plot-street boundary relation
+# - street-intersection incidence
+# - plot-building containment
+# - building-building kNN proximity
+python3 tools/prepare_urban_plot_hetero_v1.py --city beijing --urban_root data/urban_network_datasets --out_root data
+python3 tools/validate_urban_plot_hetero_v1.py --dataset_dir data/urban_beijing_plot_hetero_v1
+
+# richer hetero v2 dataset
+# keeps the same four node types, but upgrades each relation with typed edge_attr
+# and adds separate spatial / semantic building-building relations
+python3 tools/prepare_urban_plot_hetero_v2.py --city paris --urban_root data/urban_network_datasets --out_root data
+python3 tools/validate_urban_plot_hetero_v1.py --dataset_dir data/urban_paris_plot_hetero_v2
+python3 tools/smoke_test_urban_plot_hetero_v2.py --dataset_dir data/urban_paris_plot_hetero_v2
 ```
 
 Archived conversion scripts:
@@ -361,112 +262,25 @@ Then run:
 python3 tools/run_preset.py --dataset <dataset_name> --max_nums 12 --seed 0 --gpu 0
 
 # If data is placed under data/custom/<dataset_name>/
-python3 main.py --dataset <dataset_name> --root_path data/custom --max_nums 12 --gpu 0 --edge_variant V20
+python3 main.py --dataset <dataset_name> --root_path data/custom --max_nums 12 --gpu 0 --edge_variant V1 --epochs 2000 --hid_dim 512 --w_decay 0 --temperature 1.0 --warm_start auto
 
 # Example (replace with your real name)
 python3 tools/run_preset.py --dataset my_graph_v1 --max_nums 12 --seed 0 --gpu 0
 ```
 
-## Why custom datasets are necessary
-
-Native edge-attribute graph clustering datasets are limited. Many common benchmarks provide topology and node features but no high-quality native `edge_attr`.  
-To analyze model mechanism instead of leaderboard score, this repo uses controlled custom datasets for causal-style validation.
-
-### Custom dataset principle
-
-The synthetic mechanism datasets are intervention-oriented:
-
-- Keep node-label generation explicit (known communities).
-- Control graph homophily (`homophily_target`).
-- Control edge-attribute semantic strength (`edge_signal_target`).
-- Keep all outputs in normal training format (`edge_index`, `edge_weight`, `edge_attr`, `feat`, `label`, `meta`).
-
-Generator script:
-
-```bash
-python3 tools/prepare_mechanism_synth_datasets.py \
-  --prefix synth_mech_full_v1 \
-  --num_nodes 1200 \
-  --num_classes 4 \
-  --feat_dim 64 \
-  --avg_degree 16 \
-  --homophily 0.85,0.65,0.45 \
-  --edge_signal 0.9,0.6,0.3,0.0 \
-  --data_seeds 0
-```
-
-## Historical notes
-
-Earlier `G20/G15` control experiments are archived for reference only:
-
-- `archive/results/historical/benchmark_mechanism_synth_full_v1/summary_by_condition.csv`
-- `archive/results/historical/benchmark_mechanism_synth_full_v1/stat_tests_summary.json`
-- `archive/results/historical/benchmark_mechanism_permEA_v1/permutation_effect_summary.csv`
-
-They document how the project moved from:
-
-- `G15`: assignment-side calibrated residual
-- `G20`: SE-consistent scalar edge weighting
-
-to the current `B45` message-aware mainline.
-
 ## Archive
 
-Older branch-era reports, exploratory workspaces, and legacy raw results have been moved into top-level `archive/`:
-
-- `archive/docs/`: old reports, expert suggestion drafts, and the earlier `exp/` doc hub
-- `archive/configs/historical_presets/`: legacy preset JSONs that are no longer part of the active top-level preset surface
-- `archive/code/historical_builders/`: legacy dataset-conversion and builder scripts
-- `archive/workspaces/`: temporary or branch-specific experiment workspaces such as the `EP1/EP2` comparison run
-- `archive/results/historical/`: older raw result families from the pre-`B45` or branch-exploration phase
-
-## Repro commands
-
-### Full mechanism benchmark
-
-```bash
-python3 tools/run_mechanism_synth_suite.py \
-  --tag current_mechanism_suite_v1 \
-  --prefix synth_mech_full_v1 \
-  --conditions baseline_v1,g20_se_consistent_main,b31_dualscalar_assign,b45_v31_msgcond_gs050 \
-  --baseline_condition baseline_v1 \
-  --seeds 0,1,2 \
-  --epochs 80 \
-  --eval_freq 80 \
-  --train_log_interval 20 \
-  --hid_dim 256 \
-  --max_nums 12 \
-  --gpu 0 \
-  --amp_bf16 \
-  --resume
-```
-
-### Permutation auxiliary benchmark
-
-```bash
-python3 tools/run_mechanism_synth_suite.py \
-  --tag current_mechanism_permEA_v1 \
-  --datasets synth_mech_full_v1_h85_s90_ds00,synth_mech_full_v1_h85_s90_ds00_permEA,synth_mech_full_v1_h65_s90_ds00,synth_mech_full_v1_h65_s90_ds00_permEA,synth_mech_full_v1_h45_s00_ds00,synth_mech_full_v1_h45_s00_ds00_permEA \
-  --conditions g20_se_consistent_main,b45_v31_msgcond_gs050 \
-  --baseline_condition g20_se_consistent_main \
-  --seeds 0,1 \
-  --epochs 80 \
-  --eval_freq 80 \
-  --train_log_interval 20 \
-  --hid_dim 256 \
-  --max_nums 12 \
-  --gpu 0 \
-  --amp_bf16 \
-  --resume
-```
-
-By default, current aggregate summaries now live under `results/mainline_evidence/<tag>/`, while raw run outputs are nested under `results/mainline_evidence/raw_runs/`.
+- `archive/docs/README_2026-04_snapshot.md`: the pre-pass README (numbers not valid)
+- `archive/docs/expert_suggestion_2026-04/`: Expert1/Expert2 guidance and code bundles (retired)
+- `archive/configs/historical_presets/`: retired presets, still loadable by path
+- `archive/code/`: retired runners, scripts and dataset builders
+- `archive/workspaces/`: expert workspaces used for the April EP comparison
+- `archive/results/historical/`: pre-B45 result families
 
 ## References
 
 - Original DSE repository: https://github.com/RiemannGraph/DSE_clustering
-- DSE/LSEnet paper: https://arxiv.org/abs/2504.09970
-- Local paper copy: `reference/2504.09970v2.pdf`
+- DSE/LSEnet paper: https://arxiv.org/abs/2504.09970 (local copy `reference/2504.09970v2.pdf`); LSEnet ICML 2024: `reference/sun24g.pdf`
 - Original implementation explanation note: `reading/EXPLAIN_DSE_original_en.md`
 
 ## License
