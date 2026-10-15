@@ -1,6 +1,6 @@
 # Project tools
 
-Updated 2026-10-15. Run from the repository root using `.venv/bin/python`; each Python tool provides `--help`.
+Updated 2026-10-15 (evening). Run from the repository root using `.venv/bin/python`; each Python tool provides `--help`.
 The [environment declaration](../UV_ENVIRONMENTS.txt), [dataset guide](../data/README.md) and
 [experiment plans](../configs/breakthrough/README.md) describe shared prerequisites.
 
@@ -9,8 +9,11 @@ The [environment declaration](../UV_ENVIRONMENTS.txt), [dataset guide](../data/R
 | Tool | Purpose |
 |---|---|
 | `run_preset.py` | One preset run; B31 default, 2000 epochs, cold start; `--dry_run` previews the command |
-| `run_breakthrough.py` | Expand JSON plans and launch concurrent training jobs on one GPU |
-| `run_classic_baselines.py` | KMeans(X), spectral(A), Louvain(A), SGC(A,X)+KMeans floors |
+| `run_breakthrough.py` | Expand JSON plans and launch concurrent training jobs on one GPU; `--num_shards/--shards` split a plan across machines |
+| `run_classic_baselines.py` | KMeans(X), spectral(A), Louvain(A), SGC(A,X)+KMeans floors; also provides `spectral_reg`, regularized spectral clustering |
+| `run_se_guided_baseline.py` | Label-free search over explicit edge weightings (edge channels, multiplex layers, endpoint context, products), scored by two-level SE; `--spectral reg`, `--order2`, `--beam B --max_order R` |
+| `write_se_reweighted_dataset.py` | Write a search pick as `<name>_edge_weight.npy` next to a copy of the dataset, for training the edge-free DSE on it |
+| `se_select_decoder.py` | For runs on a reweighted graph, compare the DSE assignment with spectral / SGC partitions by two-level SE (`--spectral reg`) |
 | `report_e2_mechanism.py` | Synthetic edge-information controls and effect tables |
 | `report_e3_real.py` | Merge real runs, choose starts using baseline SE, write tables; supports `--out_dir` |
 | `build_results_index.py` | Utility for indexing local result files |
@@ -24,11 +27,19 @@ selects starts after both runs exist. `max_nums` is a hierarchy budget, not a gu
 |---|---|
 | `screen_edge_headroom.py` | Prepared graphs; supervised same-label edge classifier and graph reweighting, for diagnosis only |
 | `check_se_alignment.py` | Prepared graphs; compares label SE with spectral/SGC partitions over candidate weights; skips `-1` labels |
+| `check_spectral_stability.py` | Prepared graphs; plain vs regularized spectral NMI across eigensolver start vectors, with component counts |
 | `inspect_edge_factors.py` | A run directory with `stdout.txt`, its dataset and matching checkpoint; inspects learned scalar heads |
 | `diagnose_b45_message_gate.py` | A run directory and data; checkpoint interventions or controlled short paired training |
 | `prepare_edge_intervention_dataset.py` | Prepared graph; creates edge-attribute controls |
 
 ```bash
+# Search, write the pick, train the edge-free DSE, then compare decoders (labels only score the results)
+.venv/bin/python tools/run_se_guided_baseline.py --datasets acm_multiplex_v2 --seeds 0 --spectral reg --workers 8 \
+  --out_dir results/breakthrough_v1/search_acm
+.venv/bin/python tools/write_se_reweighted_dataset.py --dataset acm_multiplex_v2 --pick=layer+PAP --out_name acm_sepick
+.venv/bin/python tools/se_select_decoder.py --spectral reg --run_dirs results/breakthrough_v1/e14_search_then_train/runs/*acm_sepick*/ \
+  --out_csv results/breakthrough_v1/e14_search_then_train/decoder_select_acm.csv
+
 .venv/bin/python tools/check_se_alignment.py --datasets cora,photo,dblp_magnn_author_v2,acm_multiplex_v2 \
   --out_csv results/breakthrough_v1/e10_se_alignment/se_alignment.csv
 
@@ -55,7 +66,7 @@ result was run separately with the same seed and initialization protocol. No hoo
 
 | Family | Entry points |
 |---|---|
-| Current synthetic benchmark | `prepare_synth_ctx_datasets.py --feature_sep 0.35 --homophily 0.45,0.55` |
+| Current synthetic benchmark | `prepare_synth_ctx_datasets.py --feature_sep 0.35 --homophily 0.45,0.55`; `--prefix synth_ctxxor_v1 --role_mode xor2` builds the second-order (XOR-role) variant |
 | DBLP author graph | `prepare_pyg_dblp_magnn_dataset.py --mode v2` |
 | ACM / IMDB meta-path union | `prepare_pyg_multiplex_dataset.py`; ACM v2 uses `--psp_sample_k 20` |
 | Urban V3 / V3b | `prepare_urban_plot_graph_v3.py`, `prepare_urban_plot_graph_v3b.py`, matching `run_*_series.py` |

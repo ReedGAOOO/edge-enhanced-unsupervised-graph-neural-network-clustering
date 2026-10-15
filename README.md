@@ -3,22 +3,26 @@
 Unsupervised graph clustering built on DSE/LSEnet (Lorentz structural entropy), with edge-aware variants. The
 question the project asks: when do edge attributes help structural-entropy clustering, and which model actually uses them?
 
-## Current status (2026-10-15)
+## Current status (2026-10-15, evening)
 
-The active branch is `breakthrough-2026-10`. The October pass now includes E1–E9, an SE-alignment screen (E10),
-and controlled B45 message-gate diagnostics. The practical findings are:
+The active branch is `breakthrough-2026-10`. Plans E1–E16 are recorded. The current position:
 
-- Use `baseline_v1` as the edge-free control. The convenience runner still defaults to `b31_dualscalar_assign`;
-  that default is an edge-aware starting point, not a claim that B31 beats the baseline on every dataset.
-- B31 with endpoint context can use contextual synthetic edge signals and improves some real-graph results.
-  It still trails the baseline on Photo/AIFB under the selected-start protocol.
-- E9's `--edge_weight_learn_apply_to msg_only` removes learned scalar weights from the SE graph. It recovers B31's
-  DBLP result to baseline level, but does not generally improve real graphs. **44 real-graph runs are complete;
-  the 48 planned synthetic runs have no recorded results.**
-- B45's Photo collapse is linked to train/decode embedding mismatch, amplified by gate normalization and isolated-node
-  geometry. Short, single-seed interventions recover NMI ≈ 0.642; these are diagnostic hooks, not a production fix.
-- Training and start selection use SE rather than NMI. The benchmark supplies a cluster budget; the default warm-start
-  pseudo-partition size uses the dataset's class count. Label-based headroom and alignment screens are diagnostics only.
+- **Learned edge heads are not the method.** On first-order contextual edges a training-free, SE-guided search over
+  explicit edge weightings matches them; on second-order (XOR-role) contexts the learned heads read nothing (context
+  effect ≈ 0) while exhaustive second-order search recovers the signal (E12–E13). The SE gradient has no first-order
+  signal to follow for parity-like interactions, and neither does a beam search (E15).
+- **Mainline: SE-guided edge-weight search, then the edge-free DSE on the searched graph.** The search
+  (`tools/run_se_guided_baseline.py --spectral reg`) uses no labels. It finds the useful weighting where one exists
+  (ACM `layer+PAP`, the DBLP venue channel, the synthetic contexts including XOR at second order), and training DSE on
+  the searched ACM graph lifts it from 0.464 to 0.538 (E14/E16).
+- **Label-free choice between clusterers is not solved.** Choosing DSE, spectral or SGC by structural entropy rescues
+  AIFB (0.08 → 0.44) and the synthetic graphs but selects a worse regularized-spectral partition on Photo
+  (0.629 → 0.453). DSE decoding and SE-selected decoding are reported separately.
+- **Plain spectral clustering is unstable on graphs with more components than clusters** (Cora 78, Photo 136): NMI over
+  five eigensolver starts spans 0.03–0.18 on Cora and 0.005–0.51 on Photo. `spectral_reg` removes this (E15).
+- **B45's message gate is fixed.** `--no-edge_msg_gate_renorm` removes the Photo collapse (0.004 → 0.634) and keeps
+  the first-order contextual gains (0.720 / 0.902) at full budget (E11). B31/B45 remain as ablations.
+- Training and start selection use SE rather than NMI. Label-based headroom, alignment and oracle columns are diagnostics.
 
 Start with [Quick start](#quick-start), [Reproducing the breakthrough pass](#reproducing-the-breakthrough-pass),
 or the [dataset guide](#dataset-guide-type-location-commands). Small evidence tables are tracked in
@@ -222,8 +226,12 @@ records each seed and start.
 | acm_multiplex_v2 | warm | 0.464±0.002 | 0.491±0.006 | 0.493±0.002 | 0.519±0.001 | 0.479±0.013 |
 
 This does not solve real-data edge selection: Photo/AIFB still trail the baseline, and ACM with context gets worse.
-The plan also contains 48 synthetic runs, but the local result ledger contains only the 44 real-graph runs above.
-There is no E9 synthetic conclusion yet.
+The 48 synthetic jobs ran afterwards on an RTX 4060 Laptop with the same plan. Removing learned SE reweighting roughly
+halves the synthetic edge gains: the direct effect falls from +0.40 to +0.24 (h45) and from +0.24 to +0.13 (h55); the
+context effect with endpoint context falls from +0.18 to +0.09 / +0.10. Where the SE-cheapest weighting is the
+label-aligned one (synthetic), about half of the edge gain flows through the learned SE graph; on real graphs that
+pathway is roughly neutral. Rows: [synth_mechanism.csv](configs/breakthrough/evidence/synth_mechanism.csv); the
+cross-device drift check below bounds the machine effect at about 0.02.
 
 `e9x_machine_check` reruns two warm, seed-0 configurations on an RTX 4060 Laptop: Cora changes from 0.4344 to
 0.4511 and DBLP from 0.7600 to 0.7607. Pseudo-partition NMI is unchanged. This is a two-run drift check, not proof of
@@ -242,7 +250,7 @@ an objective-alignment concern, but DBLP's SE-preferred venue weighting also rea
 dataset-dependent. The full small screen is tracked in [se_alignment.csv](configs/breakthrough/evidence/se_alignment.csv).
 Labels are used only in this screen; graphs containing `-1` labels are skipped.
 
-### B45 follow-up: collapse mechanism, not a merged fix
+### B45 follow-up: collapse mechanism
 
 `tools/diagnose_b45_message_gate.py` adds checkpoint interventions, graph-cross probes and paired short training
 without changing the production gate. On Photo, seed 0, a common initialization and fixed SGC pseudo partition
@@ -264,11 +272,95 @@ post-gate normalization increases the new-edge weight share from 3.56% to roughl
 These are different checkpoints/protocols from the paired short-training table and should not be combined into one score.
 
 The AIFB checkpoint shows the same direction of mismatch; DBLP does not. The DBLP paired-training probe was interrupted
-by resource contention and is excluded. This is single-seed diagnostic evidence; the `safe_isolates` hook and normalization
-interventions have **not** been adopted in `modules/layers.py` or validated at the full benchmark budget.
+by resource contention and is excluded. The normalization fix is now a model switch (`--no-edge_msg_gate_renorm`;
+`--keep_isolated_nodes` implements the isolated-row variant) and is validated at the full budget in E11 below.
 See the [intervention](configs/breakthrough/evidence/b45_gate_interventions.csv),
 [graph-cross](configs/breakthrough/evidence/b45_graph_cross.csv) and
 [graph-statistics](configs/breakthrough/evidence/b45_graph_stats.csv) tables.
+
+### E11: safe message gate and B31 pathways
+
+`e11_safe_gate_pathways.json` trains B45 + endpoint context with gate re-normalization off (`b45nrctx`), ablates B31's
+pathways on Photo/AIFB, and adds seeds 1–2 to the Photo/AIFB references (all real rows now use three seeds, except
+where marked). Selected start, NMI:
+
+| dataset | baseline | B31 | B31+ctx | B45 | B45 safe gate + ctx |
+|---|---|---|---|---|---|
+| cora | 0.430±0.020 | 0.404±0.024 | 0.472±0.016 | 0.424±0.019 | **0.479±0.027** |
+| photo | **0.638±0.001** | 0.583±0.036 | 0.598 (1 seed) | 0.004 (1 seed) | 0.634±0.023 |
+| dblp_magnn_author_v2 | 0.759±0.002 | 0.749±0.007 | **0.765±0.010** | 0.738±0.012 | 0.740±0.014 |
+| entities_aifb | **0.184±0.019** | 0.116±0.016 | 0.126 (1 seed) | 0.017 (1 seed) | 0.129±0.013 |
+| acm_multiplex_v2 | 0.464±0.002 | 0.491±0.006 | **0.519±0.001** | 0.494±0.004 | 0.508±0.004 |
+
+On `synth_ctx_v1` the safe gate keeps B45's contextual reading: contextual 0.720 / 0.902 (h45 / h55) against
+permEA 0.357 / 0.728 and none 0.370 / 0.725; the original B45 + context reached 0.708 / 0.901. B31 pathway ablations
+(warm start, three seeds unless marked) give Photo 0.55–0.60 for every variant, so no single pathway explains the Photo gap; on AIFB
+the learned SE factors hurt most (SE-graph-only 0.084, message-only 0.134) and removing the assignment residual is worse
+still (0.029). A graph-cross probe of the B31 Photo checkpoint shows no train/decode mismatch (0.51–0.56 in all cells).
+
+### E12–E13: a training-free search, and contexts the learned heads cannot read
+
+`tools/run_se_guided_baseline.py` scores explicit edge weightings without training: one edge channel or multiplex layer
+(F1), one endpoint-context channel (F2), an edge channel times a context channel (F3), optionally exhaustive
+second-order products (F4) or a beam (Br). Factors use B31's range [0.5, 2]. Each weighted graph is clustered by
+spectral clustering and SGC+KMeans at the class count; the lowest two-level SE wins. Labels score the pick only.
+
+| benchmark | search, no context | search, first-order context | search, second-order | B31+ctx | B45+ctx |
+|---|---|---|---|---|---|
+| synth_ctx_v1 contextual h45 / h55 | 0.531 / 0.733 | **0.724** / 0.822 | — | 0.472 / 0.883 | 0.708 / **0.901** |
+| synth_ctxxor_v1 contextual h45 / h55 | 0.094 / 0.559 | 0.015 / 0.559 | **0.448 / 0.825** | 0.169 / 0.688 | 0.170 / 0.717 (safe gate) |
+
+`synth_ctxxor_v1` (`--role_mode xor2`) exposes two latent bits per node and sets role = bit1 XOR bit2, so the useful
+reading is `attr0 × ctx_a × ctx_b`. The learned heads' context effect is +0.00 / +0.01–0.03 there, while second-order
+enumeration finds `+attr0*ctx32*ctx33` with 4,837 candidates (349 at first order). On first-order contexts the search
+matches the learned heads at h45 and trails them by 0.06–0.08 at h55.
+
+On real graphs (plain spectral, seed 0) the search reaches Cora 0.468, Photo 0.566, DBLP 0.766, AIFB 0.461 and ACM
+0.557. E15 shows that the Cora/Photo numbers depend on plain spectral's unstable eigenvectors and that the AIFB number
+mostly reflects plain spectral's weakness there. Rows: [se_search_plain.csv](configs/breakthrough/evidence/se_search_plain.csv),
+[xor_context_learned.csv](configs/breakthrough/evidence/xor_context_learned.csv).
+
+### E14–E16: search, then train
+
+The search pick is written as fixed edge weights (`tools/write_se_reweighted_dataset.py`), the edge-free DSE is trained
+on that graph (dual starts, baseline-guided), and `tools/se_select_decoder.py` optionally chooses between the DSE
+assignment and spectral / SGC partitions of the same graph by structural entropy. E14 uses the plain-spectral search
+and decoder choice; E16 repeats it with regularized spectral after E15. Three seeds, NMI:
+
+| dataset | DSE, original graph | DSE on searched graph | E14: + SE decoder (plain) | E16: + SE decoder (regularized) |
+|---|---|---|---|---|
+| cora | 0.430 | 0.450 | 0.451 | 0.431 |
+| photo | **0.638** | 0.629 | 0.629 | 0.453 |
+| dblp_magnn_author_v2 | 0.759 | 0.761 | **0.766** | 0.761 |
+| entities_aifb | 0.184 | 0.083 | **0.461** | 0.443 |
+| acm_multiplex_v2 | 0.464 | **0.538** | 0.538 | 0.538 |
+| mean | 0.495 | 0.492 | 0.569 | 0.525 |
+
+The "DSE on searched graph" column uses E16's picks (Cora `+logdeg_gap`, AIFB `+attr1*ctx2`; Photo, DBLP and ACM as in
+E14). On the synthetic picks the regularized decoder choice gives 0.725 / 0.913 (first-order contexts) and 0.477 / 0.811
+(XOR, second-order pick). The search improves the graph DSE trains on where an edge channel carries the target
+structure (ACM +0.074). Choosing the decoder by SE is the unreliable part: a stronger SE optimizer (regularized spectral)
+wins the comparison on Photo with a less label-aligned partition. E14's higher mean partly reflects plain spectral
+losing to DSE, and its Photo pick differed between two machines.
+
+**E15, robustness and scale.** `tools/check_spectral_stability.py` runs spectral clustering from five eigensolver starts:
+
+| dataset | components | plain spectral NMI (min–max) | regularized spectral NMI |
+|---|---|---|---|
+| Cora | 78 | 0.027–0.177 | 0.336 |
+| Photo | 136 | 0.005–0.513 | 0.461 |
+| DBLP | 1 | 0.728 | 0.751 |
+| AIFB | 3 | 0.129 | 0.512 |
+| ACM | 1 | 0.566 | 0.501 |
+
+Regularized spectral clustering (`spectral_reg`, τ = mean degree) is start-independent; with it the search picks are
+identical across seeds. On AIFB the regularized uniform graph alone gives 0.512 and the best edge-only pick 0.62, while
+adding context candidates lets SE prefer a weaker pick (0.443), so AIFB's earlier gain was not a contextual effect.
+A beam over context products (width 8, order 2; at most ~500 extra candidates) never selects a second-order term on the real graphs
+and fails on XOR (0.019 / 0.698 against 0.477 / 0.812 for exhaustive search): without lower-order signal there is nothing
+for the beam to extend. Rows: [spectral_stability.csv](configs/breakthrough/evidence/spectral_stability.csv),
+[se_search_reg_beam.csv](configs/breakthrough/evidence/se_search_reg_beam.csv),
+[search_then_train.csv](configs/breakthrough/evidence/search_then_train.csv).
 
 ### Retired in this pass
 
@@ -280,7 +372,8 @@ See the [intervention](configs/breakthrough/evidence/b45_gate_interventions.csv)
 | EP2 (Expert2 relation state, B50) | E2: collapses to one cluster even with a warm start |
 | Expert3 shared-tree multi-channel prototype | Never beat its own early-scalarised ablation (e.g. 0.39 vs 0.86 on old h85); dense C×N×N adjacency |
 | Presets B40, B47, B48, G20 (moved to `archive/configs/historical_presets/`) | B40/B47 are minor B45 variants, B48 was harmful, G20's SE path is inside B45 |
-| B45 as the default preset (kept, not retired) | Its message gate collapses training on Photo/AIFB (E4); B31 is the default |
+| B45 as the default preset (kept, not retired) | Its message gate collapsed Photo/AIFB (E4); fixed by `--no-edge_msg_gate_renorm` (E11), still an ablation |
+| Learned edge heads as the proposed method (kept as ablations) | Matched by a training-free search on first-order contexts; blind to second-order contexts (E12–E13) |
 | IMDB multiplex | Genre labels unrecoverable from any layer |
 | `Expert suggestion/` (moved to `archive/docs/expert_suggestion_2026-04/`) | Both directions refuted |
 | Urban land-use NMI as clustering evidence | Labels unrelated to graph communities; Urban stays a data-paper track |
@@ -288,18 +381,18 @@ See the [intervention](configs/breakthrough/evidence/b45_gate_interventions.csv)
 
 ### Open problems, in priority order
 
-1. **Aligning the objective and edge selection with useful structure**: E9 removes scalar reweighting from the SE graph
-   without a general gain. E10 shows that SE-preferred candidates need not be the label-relevant ones. Feature consistency
-   and per-type volume constraints remain hypotheses to test, especially on ACM.
-2. **Fixing train/decode geometry before redesigning the gate**: validate isolated-row handling and graph normalization
-   in a consistent training/inference path, then rerun B45 at full budget across seeds. The Photo hooks are promising
-   diagnostics, not a replacement benchmark. Preserve direct/contextual synthetic edge gains when testing a fix.
-3. **Model selection without labels**: the baseline-guided start rule works; choosing between baseline, B31+ctx and B45 does not
-   (modularity and SE loss both prefer the wrong run on DBLP).
-4. **Backbone vs simple baselines**: DSE still trails spectral clustering on ACM (0.46-0.52 vs 0.566) and SGC on weak-feature
-   synthetic graphs, and SE training can move away from a good initial partition (ACM 0.566 → 0.46, synth h55 0.73 → 0.60).
-5. **More real graphs with edge-type headroom**: ACM is the only one so far; other multiplex/heterogeneous graphs with
-   recoverable labels are the next datasets to screen with `tools/screen_edge_headroom.py` and a layer-subset check.
+1. **Label-free choice between partition generators and models.** Structural entropy prefers the most compressible
+   partition, whichever method produced it: it rescued AIFB and failed on Photo (E16), and it chose the wrong model on
+   DBLP earlier. The baseline-guided start rule is the only selection rule that has held up.
+2. **Higher-order contexts.** Exhaustive enumeration works but grows combinatorially (349 → 4,837 candidates at order 2
+   with 34 context dims); gradients and beams need lower-order signal. A prior on which node attributes can carry context
+   (categorical node types or roles) is the practical lever to test.
+3. **DSE where SE is misaligned or the backbone is weak.** AIFB: DSE 0.18 against regularized spectral 0.51;
+   ACM: 0.46–0.54 against spectral 0.566; SE training can drift away from a good initial partition.
+4. **More real graphs with edge-type headroom.** ACM remains the main case; AIFB's gain comes from a relation channel
+   without context. Screen candidates with `tools/screen_edge_headroom.py` and the search before training.
+5. **Search robustness beyond the eigensolver.** Picks are now start-independent, but the candidate pool still matters:
+   adding context candidates changed AIFB's winner from 0.62 to 0.443.
 
 ## Quick start
 
@@ -317,6 +410,13 @@ uv pip sync --python .venv/bin/python --torch-backend cu129 requirements.uv.lock
 
 # preview a command without training
 .venv/bin/python tools/run_preset.py --preset baseline_v1 --dataset cora --dry_run
+
+# mainline: label-free edge-weight search, then the edge-free DSE on the searched graph
+.venv/bin/python tools/run_se_guided_baseline.py --datasets acm_multiplex_v2 --seeds 0 --spectral reg --workers 8 \
+  --out_dir results/breakthrough_v1/search_acm
+# take summary.csv's ctx_pick before the "/" (here layer+PAP); context picks also need the search's --ctx_dim
+.venv/bin/python tools/write_se_reweighted_dataset.py --dataset acm_multiplex_v2 --pick=layer+PAP --out_name acm_sepick
+.venv/bin/python tools/run_preset.py --preset baseline_v1 --dataset acm_sepick --max_nums 6 --epochs 1000 --warm_start auto
 ```
 
 Run commands from the repository root. See [UV_ENVIRONMENTS.txt](UV_ENVIRONMENTS.txt) for the Python 3.11 /
@@ -348,10 +448,24 @@ for plan in e1_backbone_gate e2d_plateau_diag e2_synth_ctx_warm e3_real_dual e4_
             e6_b31_robust e7_ctx_edge e8_ctx_real; do
   .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/$plan.json --root_path "$DATA" --max_parallel 4
 done
-# E9: run the real-graph subset with recorded evidence; omit --only_tags to include the uncompleted synthetic jobs
+# E9: real-graph subset; omit --only_tags to include the 48 synthetic jobs
 .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e9_fixed_ruler.json --root_path "$DATA" \
   --only_tags b31fr_warm,b31fr_nowarm,b31frctx_warm,b31frctx_nowarm --max_parallel 4
-.venv/bin/python tools/report_e2_mechanism.py --extra_dirs results/breakthrough_v1/e6_b31_robust,results/breakthrough_v1/e7_ctx_edge
+.venv/bin/python tools/report_e2_mechanism.py --extra_dirs results/breakthrough_v1/e6_b31_robust,results/breakthrough_v1/e7_ctx_edge,results/breakthrough_v1/e9_fixed_ruler,results/breakthrough_v1/e11_safe_gate_pathways
+# E11 safe gate / pathways; E13 learned heads on XOR contexts (build synth_ctxxor_v1 first)
+.venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e11_safe_gate_pathways.json --root_path "$DATA" --max_parallel 4
+.venv/bin/python tools/prepare_synth_ctx_datasets.py --root_path "$DATA" --prefix synth_ctxxor_v1 --role_mode xor2 \
+  --feature_sep 0.35 --homophily 0.45,0.55 --modes none,contextual --perm_modes contextual
+.venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e13_xor_context.json --root_path "$DATA" --max_parallel 4
+# E12/E15 searches (CPU) and the spectral start-vector check
+.venv/bin/python tools/run_se_guided_baseline.py --root_path "$DATA" --datasets Cora,Photo,dblp_magnn_author_v2,entities_aifb,acm_multiplex_v2 \
+  --seeds 0,1,2 --spectral reg --beam 8 --max_order 2 --workers 16 --out_dir results/breakthrough_v1/e15_search_robustness/real_reg_beam
+.venv/bin/python tools/check_spectral_stability.py --root_path "$DATA" --datasets Cora,Photo,dblp_magnn_author_v2,entities_aifb,acm_multiplex_v2 \
+  --out_csv results/breakthrough_v1/e15_search_robustness/spectral_stability.csv
+# E14/E16: write each pick (table in configs/breakthrough/README.md), train, choose decoders
+.venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e16_search_then_train_reg.json --root_path "$DATA" --max_parallel 5
+.venv/bin/python tools/se_select_decoder.py --spectral reg --run_dirs results/breakthrough_v1/e16_search_then_train_reg/runs/*/ \
+  --out_csv results/breakthrough_v1/e16_search_then_train_reg/decoder_select_reg.csv
 .venv/bin/python tools/report_e3_real.py --extra_dirs results/breakthrough_v1/e6_b31_robust,results/breakthrough_v1/e8_ctx_real,results/breakthrough_v1/e9_fixed_ruler \
   --extra_classic results/breakthrough_v1/e6_b31_robust/classic_acm_v2.csv \
   --datasets cora,photo,dblp_magnn_author_v2,entities_aifb,urban_paris_plot_v3bsjg,acm_multiplex_v2 \

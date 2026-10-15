@@ -14,11 +14,37 @@ tracked tables. Full training outputs and checkpoints are excluded from Git.
 | `e6_b31_robust.json` | Does removing the gate preserve gains and avoid collapse? | B31 synthetic/real runs, including ACM |
 | `e7_ctx_edge.json` | Can endpoint products unlock contextual edges? | Synthetic context controls |
 | `e8_ctx_real.json` | Does B31 plus context help real graphs? | Real-graph context follow-up |
-| `e9_fixed_ruler.json` | Do message-only learned factors improve the SE objective? | 44/92 planned runs recorded: all real jobs; 48 synthetic jobs have no recorded results |
+| `e9_fixed_ruler.json` | Do message-only learned factors improve the SE objective? | 92/92 recorded; the 48 synthetic jobs ran on an RTX 4060 Laptop |
 | `e9x_machine_check.json` | How much do two seed-0 runs drift on another GPU? | 2/2 recorded; current-host launcher, no remote orchestration |
+| `e11_safe_gate_pathways.json` | Does a non-renormalized gate keep B45's gains without collapse? Which B31 pathway costs Photo/AIFB? | 57/57 recorded |
+| `e13_xor_context.json` | Can learned edge heads read second-order (XOR-role) contexts? | 42/42 recorded |
+| `e14_search_then_train.json` | Edge-free DSE trained on the plain-spectral search picks | 42/42 recorded on the RTX 4090 server |
+| `e16_search_then_train_reg.json` | The same with the regularized-spectral picks (Cora, AIFB retrained) | 12/12 recorded on the RTX 4090 server |
 
-E5 headroom, E10 SE alignment and the B45 gate diagnosis are standalone tools, not missing numbered plan files.
-Their commands are documented in [tools/README.md](../../tools/README.md).
+E5 headroom, E10 SE alignment, the B45 gate diagnosis, the E12 search, and E15 (spectral stability, regularized and beam
+search) are standalone tool runs, not missing numbered plan files. Their commands are documented in
+[tools/README.md](../../tools/README.md) and the root README's reproduction block.
+
+### Search picks used by E14 and E16
+
+The picks come from `tools/run_se_guided_baseline.py` summaries (`ctx_pick`, before the `/`), chosen without labels.
+Write each with `tools/write_se_reweighted_dataset.py --dataset <source> --pick=<pick> [--ctx_dim <d>] --out_name <name>`;
+use `--pick=` with an equals sign because many picks start with `-` or `+`.
+
+| out_name | source dataset | pick | ctx_dim | search |
+|---|---|---|---|---|
+| `cora_sepick` | Cora | `-logdeg_gap*ctx23` | 32 | E12, plain spectral |
+| `cora_sepick_reg` | Cora | `+logdeg_gap` | — | E15, regularized |
+| `photo_sepick` | Photo | `+logdeg_dst` | — | rerun on the 4090 (local E12 chose `+l2*ctx1`); E15 agrees |
+| `dblp_sepick` | dblp_magnn_author_v2 | `+apcpa_conference_cosine` | — | E12 and E15 |
+| `aifb_sepick` | entities_aifb | `+attr0*ctx5` | 32 | E12, plain spectral |
+| `aifb_sepick_reg` | entities_aifb | `+attr1*ctx2` | 32 | E15, regularized (`noctx` pick `+attr1` scores higher) |
+| `acm_sepick` | acm_multiplex_v2 | `layer+PAP` | — | E12 and E15 |
+| `synthctx_h{45,55}_sepick` | synth_ctx_v1_h{45,55}_contextual_ds00 | `+attr0*ctx32` | 64 | E12 and E15 |
+| `synthxor_h{45,55}_sepick` | synth_ctxxor_v1_h{45,55}_contextual_ds00 | `+attr0*ctx32*ctx33` | 64 | E13/E15 `--order2` |
+
+Plain-spectral picks on graphs with more components than clusters (Cora, Photo) can differ between machines because
+plain spectral clustering depends on the eigensolver start there; E15's regularized search does not.
 
 ## Launching and resuming
 
@@ -40,7 +66,9 @@ and `summary.csv` for the selected jobs, although per-run directories remain. Pr
 
 Each run writes `stdout.txt` (first line: exact command), a training log and metrics JSON. The plan root holds
 `plan.json`, `runs.csv` and `summary.csv`. Checkpoints are under `checkpoints/breakthrough_v1/...`.
-`--max_parallel` controls processes on one GPU, not agents or machines. Four or fewer jobs is a practical starting point
+`--max_parallel` controls processes on one GPU. To split a plan across machines, run the same plan with
+`--num_shards N --shards i,j` on each (shard = job index mod N) and merge the per-run directories afterwards; rerunning
+the plan on one machine with all runs present rebuilds `runs.csv` from the cached metrics. Four or fewer jobs is a practical starting point
 for larger graphs; reduce it if memory contention develops. `--threads` caps CPU library threads per process.
 
 ## Prerequisites and interpretation
@@ -57,14 +85,17 @@ for larger graphs; reduce it if memory contention develops. `--threads` caps CPU
 - The benchmark supplies class counts/cluster budgets. E5/E10 use labels for diagnosis and do not train the models.
 - E9 `msg_only` skips learned scalar SE weighting but retains augmentation, base weights, assignment residuals and
   the edge regularizer. Its SE graph is not a frozen original adjacency.
+- E14/E16 train the edge-free baseline preset on reweighted copies of the datasets; `tools/se_select_decoder.py` then
+  compares the DSE assignment with spectral / SGC partitions of the same weighted graph by two-level SE. Report the DSE
+  column and the SE-selected column separately; the selection is not reliable across datasets.
 
 ## Regenerating the real-graph report
 
-With the E3/E6/E8/E9 output ledgers and classic-floor CSVs present:
+With the E3/E6/E8/E9/E11 output ledgers and classic-floor CSVs present:
 
 ```bash
 .venv/bin/python tools/report_e3_real.py \
-  --extra_dirs results/breakthrough_v1/e6_b31_robust,results/breakthrough_v1/e8_ctx_real,results/breakthrough_v1/e9_fixed_ruler \
+  --extra_dirs results/breakthrough_v1/e6_b31_robust,results/breakthrough_v1/e8_ctx_real,results/breakthrough_v1/e9_fixed_ruler,results/breakthrough_v1/e11_safe_gate_pathways \
   --extra_classic results/breakthrough_v1/e6_b31_robust/classic_acm_v2.csv \
   --datasets cora,photo,dblp_magnn_author_v2,entities_aifb,acm_multiplex_v2 \
   --out_dir results/breakthrough_v1/combined_real

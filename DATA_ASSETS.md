@@ -33,12 +33,19 @@ Large or ignored assets of this repo that are not stored in Git. Each `###` bloc
 ## Local, ignored by Git
 
 ### breakthrough_results
-- role: E1-E9 breakthrough-pass outputs, E9x machine checks, E10 SE-alignment screen and B45 gate diagnostics (ledgers, tables, logs, metrics and probe JSON)
-- location: results/breakthrough_v1/ (E1-E9, e5_headroom, e9x_machine_check, e10_se_alignment, b45_gate_diagnosis)
+- role: E1-E16 breakthrough-pass outputs, E9x machine checks, E10 SE-alignment screen, B45 gate diagnostics, E12/E15 search outputs (ledgers, tables, logs, metrics, candidate CSVs and probe JSON)
+- location: results/breakthrough_v1/ (E1-E16, e5_headroom, e9x_machine_check, e10_se_alignment, e12_se_guided_baseline, e15_search_robustness, b45_gate_diagnosis)
 - producer: tools/run_breakthrough.py with configs/breakthrough/*.json; tables from tools/report_e2_mechanism.py and tools/report_e3_real.py
 - status: full raw outputs remain local with no backup recorded; headline numbers are in README.md and compact E9/E10/B45 evidence tables are tracked under configs/breakthrough/evidence/
 - notes: results/breakthrough_v1/_code/ holds patched copies of the expert1/expert2 workspaces (warm start via encoder hook) used for EP1/EP2
-- completion: E9 has 44 real-graph runs in its ledger; 48 planned synthetic runs have no recorded results; E9x has two runs; B45 DBLP paired training was interrupted and is excluded from conclusions
+- completion: E9 complete (92 runs; the 48 synthetic runs were trained on the ThinkBook RTX 4060 Laptop and copied back); E11 57, E13 42, E14 42, E16 12 runs; E14-E16 per-run directories were copied back from the RTX 4090 server; E9x has two runs; B45 DBLP paired training was interrupted and is excluded from conclusions
+
+### breakthrough_remote_copies
+- role: working copies used to run E9 (synthetic part), E14, E15 and E16 off the local GPU
+- location: RTX 4090 server `/data/yijie/projects/edge-enhanced-unsupervised-graph-neural-network-clustering` (uv env, data subset, the `*_sepick` derived datasets, E14/E16 checkpoints of about 190 MB plus E16's); ThinkBook 16p `/root/edge-enhanced-unsupervised-graph-neural-network-clustering` (E9 run copy)
+- producer: rsync of the Git-tracked files plus the needed datasets; access through `/home/aitx/workspace/tools/ual-4090-access/ssh_helper.py`
+- status: result directories are copied back into results/breakthrough_v1/; the `*_sepick` datasets and E14/E16 checkpoints exist only on the 4090 copy and are regenerable from the documented picks and plans
+- notes: the half-installed RTX 5090 copy was deleted on 2026-10-15
 
 ### breakthrough_checkpoints
 - role: model checkpoints written during breakthrough runs
