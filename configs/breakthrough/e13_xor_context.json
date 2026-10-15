@@ -1,0 +1,74 @@
+{
+  "name": "e13_xor_context",
+  "description": "Second-order context: synth_ctxxor_v1 (role = XOR of two exposed latent bits, so the context-dependent edge reading is attr0 x ctx_a x ctx_b). The SE-guided simple baseline with first-order context (edge channel x one endpoint product) fails here. Can learned edge heads with endpoint context (safe-gate B45, B31) decode it? Baseline = edge-free DSE on the same graphs.",
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "max_nums_default": 6,
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "b45nrctx_synth",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "synth_ctxxor_v1_h45_none_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00_permEA",
+        "synth_ctxxor_v1_h55_none_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00_permEA"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "edge_ctx_dim": 64,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    },
+    {
+      "tag": "b31ctx_synth",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "synth_ctxxor_v1_h45_none_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00_permEA",
+        "synth_ctxxor_v1_h55_none_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00_permEA"
+      ],
+      "overrides": {
+        "edge_ctx_dim": 64,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    },
+    {
+      "tag": "baseline_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synth_ctxxor_v1_h45_none_ds00",
+        "synth_ctxxor_v1_h55_none_ds00"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    }
+  ]
+}

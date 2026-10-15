@@ -14,7 +14,7 @@ from pathlib import Path
 import networkx as nx
 import numpy as np
 import scipy.sparse as sp
-from scipy.sparse.linalg import eigsh
+from scipy.sparse.linalg import LinearOperator, eigsh
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 from sklearn.preprocessing import StandardScaler
@@ -68,8 +68,32 @@ def kmeans(z, k, seed):
     return KMeans(k, n_init=10, random_state=seed).fit_predict(z)
 
 
-def spectral(a, k, seed):
-    _, vec = eigsh(norm_adj(a, self_loops=True), k=k, which="LA")
+def spectral(a, k, seed, v0=None):
+    _, vec = eigsh(norm_adj(a, self_loops=True), k=k, which="LA", v0=v0)
+    vec = vec / np.linalg.norm(vec, axis=1, keepdims=True).clip(1e-12)
+    return kmeans(vec, k, seed)
+
+
+def spectral_reg(a, k, seed, tau=None, v0=None):
+    """Regularized spectral clustering (Amini et al. 2013; Qin and Rohe 2013).
+
+    Uses the top eigenvectors of D_t^-1/2 (A + t/n 11^T) D_t^-1/2 with D_t = D + t I and t = mean degree. Plain
+    spectral clustering on a graph with more components than clusters (Cora 78, Photo 136) takes its eigenvectors
+    from a degenerate eigenvalue-1 subspace, so the partition depends on the eigensolver's random start; the
+    regularizer removes that degeneracy. The dense rank-one term is applied implicitly.
+    """
+    n = a.shape[0]
+    deg = np.asarray(a.sum(1)).ravel()
+    tau = float(deg.mean()) if tau is None else float(tau)
+    dinv = 1.0 / np.sqrt(deg + tau)
+
+    def matvec(v):
+        u = dinv * np.ravel(v)
+        return dinv * (a @ u + tau / n * u.sum())
+
+    op = LinearOperator((n, n), matvec=matvec, dtype=np.float64)
+    v0 = np.random.default_rng(0).normal(size=n) if v0 is None else v0
+    _, vec = eigsh(op, k=k, which="LA", v0=v0)
     vec = vec / np.linalg.norm(vec, axis=1, keepdims=True).clip(1e-12)
     return kmeans(vec, k, seed)
 

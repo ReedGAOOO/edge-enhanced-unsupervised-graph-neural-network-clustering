@@ -1,0 +1,75 @@
+{
+  "name": "e14_search_then_train",
+  "description": "Search, then train: the edge-free DSE baseline trained on graphs reweighted by the label-free SE-guided search pick (tools/run_se_guided_baseline.py picks from e12/e13, materialised by tools/write_se_reweighted_dataset.py). Decoder choice between DSE and spectral/SGC on the same graph is made afterwards by structural entropy (tools/se_select_decoder.py). Real graphs use dual starts.",
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "max_nums_default": 6,
+  "max_nums": {
+    "cora_sepick": 10,
+    "photo_sepick": 10,
+    "dblp_sepick": 12,
+    "aifb_sepick": 16,
+    "acm_sepick": 6
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora_sepick",
+        "photo_sepick",
+        "dblp_sepick",
+        "aifb_sepick",
+        "acm_sepick"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora_sepick",
+        "photo_sepick",
+        "dblp_sepick",
+        "aifb_sepick",
+        "acm_sepick"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "baseline_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synthctx_h45_sepick",
+        "synthctx_h55_sepick",
+        "synthxor_h45_sepick",
+        "synthxor_h55_sepick"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "name": "e16_search_then_train_reg",
+  "description": "Search, then train with the regularized-spectral search (e15): picks changed for Cora (+logdeg_gap) and AIFB (+attr1*ctx2), so the edge-free DSE is retrained on those two reweighted graphs. Photo, DBLP, ACM and the synthetic picks are unchanged and reuse e14 runs. Decoder choice uses tools/se_select_decoder.py --spectral reg.",
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "max_nums_default": 6,
+  "max_nums": {
+    "cora_sepick_reg": 10,
+    "aifb_sepick_reg": 16
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora_sepick_reg",
+        "aifb_sepick_reg"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora_sepick_reg",
+        "aifb_sepick_reg"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    }
+  ]
+}

@@ -11,7 +11,10 @@ and edge_attr[:, 0] was a noisy copy of the pairwise same-label bit. This genera
     direct      s * same_sign + noise (context-free signal, usable by scalar edge weighting)
     contextual  s * same_sign * role_sign + noise, where role_sign = +1 if both endpoints share a
                 latent binary role and -1 otherwise. Marginally uninformative; it can only be decoded
-                together with endpoint context. Roles are exposed as two one-hot node feature columns.
+                together with endpoint context. With --role_mode onehot (default) roles are exposed as two
+                one-hot node feature columns. With --role_mode xor2 each node has two latent bits exposed as two
+                +-1 feature columns and role = bit1 XOR bit2, so role_sign is a product of two endpoint-context
+                terms: a single edge-channel x endpoint-product reading can no longer decode it.
   Channels 1-3 are descriptive nuisances: endpoint feature cosine, log degree gap, pure noise.
 - optional `_permEA` twins with edge attributes shuffled across edges.
 """
@@ -35,12 +38,20 @@ from prepare_mechanism_synth_datasets import (
 MODES = ("none", "direct", "contextual")
 
 
-def build_features(y, roles, feat_dim, feature_sep, role_scale, rng):
+def build_features(y, role_cols, feat_dim, feature_sep, role_scale, rng):
     k = int(y.max()) + 1
     centroids = feature_sep * rng.normal(0.0, 1.0, size=(k, feat_dim))
     x = centroids[y] + rng.normal(0.0, 1.0, size=(y.shape[0], feat_dim))
-    role_cols = np.eye(2)[roles] * role_scale
-    return np.concatenate([x, role_cols], axis=1).astype(np.float32)
+    return np.concatenate([x, role_cols * role_scale], axis=1).astype(np.float32)
+
+
+def draw_roles(num_nodes, role_mode, rng):
+    """Return (roles, role feature columns)."""
+    if role_mode == "onehot":
+        roles = rng.integers(0, 2, size=num_nodes)
+        return roles, np.eye(2)[roles]
+    bits = rng.integers(0, 2, size=(num_nodes, 2))
+    return bits[:, 0] ^ bits[:, 1], 2.0 * bits - 1.0
 
 
 def build_edge_attr(src, dst, y, roles, x, mode, signal, rng):
@@ -95,6 +106,8 @@ def main() -> None:
     parser.add_argument("--avg_degree", type=float, default=12.0)
     parser.add_argument("--feature_sep", type=float, default=0.25)
     parser.add_argument("--role_scale", type=float, default=1.0)
+    parser.add_argument("--role_mode", choices=["onehot", "xor2"], default="onehot",
+                        help="onehot: role one-hot columns; xor2: role = XOR of two exposed latent bits.")
     parser.add_argument("--homophily", type=str, default="0.45,0.55,0.70")
     parser.add_argument("--modes", type=str, default="none,direct,contextual")
     parser.add_argument("--edge_signal", type=float, default=0.6)
@@ -114,11 +127,11 @@ def main() -> None:
             # Graph, labels and features are shared across modes so that only edge_attr differs.
             rng = np.random.default_rng(int(data_seed))
             y = make_balanced_labels(args.num_nodes, args.num_classes, rng)
-            roles = rng.integers(0, 2, size=args.num_nodes)
+            roles, role_cols = draw_roles(args.num_nodes, args.role_mode, rng)
             p_in, p_out = solve_sbm_probs(args.num_nodes, args.num_classes, args.avg_degree, h)
             src, dst = sample_sbm_edges(y, p_in=p_in, p_out=p_out, rng=rng)
             src, dst = connect_isolates(src, dst, y, rng)
-            x = build_features(y, roles, args.feat_dim, args.feature_sep, args.role_scale, rng)
+            x = build_features(y, role_cols, args.feat_dim, args.feature_sep, args.role_scale, rng)
             for mode in modes:
                 mode_rng = np.random.default_rng(1000 * int(data_seed) + MODES.index(mode))
                 edge_attr = build_edge_attr(src, dst, y, roles, x, mode, args.edge_signal, mode_rng)
@@ -135,7 +148,7 @@ def main() -> None:
                         "feature_sep": args.feature_sep, "edge_mode": mode, "edge_signal": args.edge_signal,
                         "edge_attr_permuted": bool(suffix), "data_seed": int(data_seed),
                         "p_in": p_in, "p_out": p_out, "num_edges_directed": int(src.shape[0]),
-                        "role_feature_columns": [args.feat_dim, args.feat_dim + 1], **stats,
+                        "role_mode": args.role_mode, "role_feature_columns": [args.feat_dim, args.feat_dim + 1], **stats,
                         "description": "Weak-feature SBM benchmark with none/direct/contextual edge semantics.",
                     }
                     write_dataset(root, name, x, y, src, dst, ea, meta, args.overwrite)
