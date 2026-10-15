@@ -1,0 +1,41 @@
+{
+  "name": "e9x_machine_check",
+  "description": "Cross-machine drift check: two e9_fixed_ruler configs (b31fr_warm, seed 0) rerun on the ThinkBook RTX 4060 Laptop; the originals ran on the local GPU. Compare NMI with e9_fixed_ruler/runs.csv.",
+  "seeds": [
+    0
+  ],
+  "max_nums": {
+    "cora": 10,
+    "photo": 10,
+    "dblp_magnn_author_v2": 12,
+    "entities_aifb": 16,
+    "acm_multiplex_v2": 6
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "b31fr_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "cora",
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    }
+  ]
+}

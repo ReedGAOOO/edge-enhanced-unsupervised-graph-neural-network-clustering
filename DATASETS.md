@@ -2,7 +2,11 @@
 
 This file describes the datasets that currently exist under `data/` in this repo, with emphasis on what is actually useful for experiments now.
 
-> **Location.** `data/` is an fstab bind mount of the D: mirror folder
+Updated 2026-10-15. Dataset payloads are not included in Git; see [data/README.md](data/README.md) for construction
+commands and the custom sparse format. E9 covers Cora, Photo, DBLP v2, AIFB and ACM v2; its synthetic jobs remain
+uncompleted. Current comparisons and their evaluation protocol are in [README.md](README.md).
+
+> **Location on the original workstation.** `data/` is an fstab bind mount of the D: mirror folder
 > `/mnt/d/WSL Projects Data/home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/data`
 > (populated 2026-10-13 from the F: copy). See `DATA_ASSETS.md` for locations, backups and verification.
 >
@@ -34,7 +38,7 @@ This file describes the datasets that currently exist under `data/` in this repo
 | `synth_mech_full_v1_*`, `synth_edgectrl_v1_*` | synthetic mechanism graphs | — | synthetic community labels | **Deprecated as evidence.** Node features alone give KMeans NMI 1.000 on every instance (feature_sep 1.5 in 64 dims), and edge channel 0 is a noisy copy of the pairwise same-label bit, so these graphs cannot show whether edges help. |
 | `urban_<city>_plot_v3bsjg` | plot-level urban homogeneous graph | high | land-use-derived plot labels with `unknown` | **Not a clustering benchmark.** `unknown` is stored as class 8 (84% of plots in WashingtonDC/Boston, 40% in Paris); evaluate with known-only labels (now the `main.py` default). With known-only labels every classic method scores NMI 0.02-0.07 while Louvain reaches modularity 0.90+, i.e. land-use labels are unrelated to the graph's community structure. Keep for the Urban data-paper track. Nodes are plots; edges come from shared street, junction-only context, and very sparse geometric fallback. Current instances: `bangkok`, `beijing`, `boston`, `chicago`, `johannesburg`, `madrid`, `melbourne`, `paris`, `shanghai`, `singapore`, `sydney`, `tokyo`, `washingtondc`. |
 | `urban_<city>_plot_hetero_v1` | plot-centric urban heterogeneous graph | high | plot labels for evaluation | First hetero Urban export family. Keeps `plot`, `street`, `intersection`, and `building` as separate node types with typed relations, but edge attributes are still relatively light. Current instances: `beijing`, `paris`. |
-| `urban_<city>_plot_hetero_v2` | plot-centric urban heterogeneous graph with typed edge attributes | high | plot labels for evaluation | Current richer hetero Urban design. It keeps the same four node types, upgrades each relation with interpretable geometry/topology/containment edge features, and separates spatial building-building edges from semantic building-building edges. Current instance: `paris`. |
+| `urban_<city>_plot_hetero_v2` | plot-centric urban heterogeneous graph with typed edge attributes | high | plot labels for evaluation | Current richer hetero Urban design. It keeps the same four node types, upgrades each relation with interpretable geometry/topology/containment edge features, and separates spatial building-building edges from semantic building-building edges. Local directories exist for the same 13 cities listed for V3b; directory presence does not establish validation or model-training coverage. |
 
 ## Auxiliary Or Legacy Prepared Datasets
 

@@ -88,7 +88,7 @@ class DSI(nn.Module):
         self.edge_state_lambda_boundary = float(max(0.0, edge_state_lambda_boundary))
         self.edge_state_lambda_support = float(max(0.0, edge_state_lambda_support))
         self.edge_state_use_context = bool(edge_state_use_context)
-        if self.edge_weight_learn_apply_to not in {'si_only', 'both'}:
+        if self.edge_weight_learn_apply_to not in {'si_only', 'msg_only', 'both'}:
             self.edge_weight_learn_apply_to = 'both'
         self.edge_aug_prior_scale = float(edge_aug_prior_scale)
         self.edge_aug_prior_mode = str(edge_aug_prior_mode).lower()
@@ -441,7 +441,17 @@ class DSI(nn.Module):
         adj_train_si = (self.alpha * adj_aug + adj_base_si).coalesce()
 
         edge_reg_raw = adj_train_msg.values().new_tensor(0.0)
-        if self._use_learnable_edge_weight_variant():
+        if self._use_learnable_edge_weight_variant() and self.edge_weight_learn_apply_to == 'msg_only':
+            # Fixed ruler: omit learned scalar SE weights; base SI weights and augmentation remain active.
+            head = 'msg' if self._use_dual_edge_weight_variant() else 'shared'
+            adj_train_msg, edge_reg_raw = self._apply_learned_edge_weight_to_adj(
+                base_adj=adj_base_msg,
+                target_adj=adj_train_msg,
+                base_edge_attr=base_edge_attr,
+                normalize_for_message=True,
+                head=head,
+            )
+        elif self._use_learnable_edge_weight_variant():
             if self._use_dual_edge_weight_variant():
                 adj_train_si, reg_si = self._apply_learned_edge_weight_to_adj(
                     base_adj=adj_base_si,

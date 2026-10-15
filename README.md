@@ -3,7 +3,42 @@
 Unsupervised graph clustering built on DSE/LSEnet (Lorentz structural entropy), with edge-aware variants. The
 question the project asks: when do edge attributes help structural-entropy clustering, and which model actually uses them?
 
-## Status (2026-10-13): breakthrough pass
+## Current status (2026-10-15)
+
+The active branch is `breakthrough-2026-10`. The October pass now includes E1–E9, an SE-alignment screen (E10),
+and controlled B45 message-gate diagnostics. The practical findings are:
+
+- Use `baseline_v1` as the edge-free control. The convenience runner still defaults to `b31_dualscalar_assign`;
+  that default is an edge-aware starting point, not a claim that B31 beats the baseline on every dataset.
+- B31 with endpoint context can use contextual synthetic edge signals and improves some real-graph results.
+  It still trails the baseline on Photo/AIFB under the selected-start protocol.
+- E9's `--edge_weight_learn_apply_to msg_only` removes learned scalar weights from the SE graph. It recovers B31's
+  DBLP result to baseline level, but does not generally improve real graphs. **44 real-graph runs are complete;
+  the 48 planned synthetic runs have no recorded results.**
+- B45's Photo collapse is linked to train/decode embedding mismatch, amplified by gate normalization and isolated-node
+  geometry. Short, single-seed interventions recover NMI ≈ 0.642; these are diagnostic hooks, not a production fix.
+- Training and start selection use SE rather than NMI. The benchmark supplies a cluster budget; the default warm-start
+  pseudo-partition size uses the dataset's class count. Label-based headroom and alignment screens are diagnostics only.
+
+Start with [Quick start](#quick-start), [Reproducing the breakthrough pass](#reproducing-the-breakthrough-pass),
+or the [dataset guide](#dataset-guide-type-location-commands). Small evidence tables are tracked in
+[configs/breakthrough/evidence/](configs/breakthrough/evidence/README.md); full logs, datasets and checkpoints are local assets.
+
+## Project map
+
+| Path | Purpose |
+|---|---|
+| `main.py`, `exp.py`, `data.py` | Training CLI, experiment lifecycle, dataset loading and edge preparation |
+| `modules/`, `manifold/`, `utils/` | DSI/LSENet, Lorentz layers and geometry, warm start, decoding and evaluation |
+| [configs/](configs/README.md) | Three active presets and the [experiment plan index](configs/breakthrough/README.md) |
+| [tools/](tools/README.md) | Runners, dataset builders, result tables and diagnostic commands |
+| [data/](data/README.md) | Git-ignored data; [DATASETS.md](DATASETS.md) describes datasets and [DATA_ASSETS.md](DATA_ASSETS.md) records local assets |
+| [reading/](reading/README.md), [reference/](reference/README.md) | Implementation notes, historical expert bundles and upstream reference material |
+| [reports/](reports/README.md) | Urban data-construction reports; separate from current clustering claims |
+| `results/`, `checkpoints/` | Generated local outputs, excluded from Git |
+| [archive/](archive/README.md) | Historical code, configs, reports and workspaces |
+
+## Breakthrough pass (2026-10-13)
 
 Everything before this pass was measured on a backbone that had not been trained. The pass fixed the backbone,
 rebuilt the synthetic benchmark, re-ran the surviving models and retired the rest. Results live in
@@ -31,7 +66,9 @@ rebuilt the synthetic benchmark, re-ran the surviving models and retired the res
   spectral clustering finds a far lower one (`e2d_plateau_diag`; higher lr, smaller `hid_dim`, wider `max_nums` and S²X input
   features all stay stuck). The warm start pre-trains the leaf assignment on spectral(A) or SGC(A,X)+KMeans, whichever has
   lower 2-level SE. Because a mediocre pseudo partition can also trap a backbone that would have escaped on its own (Cora),
-  each configuration is trained with and without warm start and the run with the lower final SE loss is kept. No step uses labels.
+  each configuration is trained with and without warm start and the run with the lower SE checkpoint loss is kept.
+  E3 used each model's own loss; E6 onward use the baseline's choice for all models. Class identities are not used to fit
+  or select the partition, but the benchmark class count supplies the default pseudo-partition size.
 - **Known-only evaluation is the default** (`--no-known_only_eval` restores the old behaviour).
 - **New synthetic benchmark** `synth_ctx_v1` (`tools/prepare_synth_ctx_datasets.py`): weak features (KMeans 0.22),
   homophily 0.45 (below the topology-only detection threshold) and 0.55, and edge channel 0 in three modes: `none`,
@@ -67,10 +104,10 @@ start (ACC 25%, NMI 0.00) and were stopped at epoch 600-1100.
   contextual semantics at all** (−0.005).
 - **B45 is hurt by uninformative edges**: with shuffled edge attributes it loses 0.10 against the edge-free baseline at h55.
 - **EP1's context conditioning does nothing**: contextual effect ≈ 0, and the context-off ablation is as good or better.
-- No model uses contextual edges, although the oracle shows 0.84-0.96 NMI is available. This remains open.
+- In E2 no model uses contextual edges, although the oracle shows 0.84-0.96 NMI is available. E7 below resolves part of this gap.
 - The DSE baseline trails SGC2+KMeans on these weak-feature graphs (0.60 vs 0.73 at h55, 0.08 vs 0.47 at h45).
 
-**E3, real graphs** (`e3_real_dual`; 3 seeds for Cora/DBLP, 1 for the rest; selection = lower final SE loss between warm
+**E3, real graphs** (`e3_real_dual`; 3 seeds for Cora/DBLP, 1 for the rest; selection = lower best-checkpoint SE loss between warm
 and cold start; known-only labels).
 
 | dataset | old B45 (60 ep) | kmeans_x | spectral_a | louvain_a | sgc2_ax | baseline (SE-selected) | B45 (SE-selected) | baseline warm / nowarm | B45 warm / nowarm |
@@ -87,7 +124,7 @@ and cold start; known-only labels).
 - **B45 adds nothing on real graphs and collapses on Photo and AIFB** (0.004 / 0.017 with either start).
 - SE-based start selection picked the better start for the baseline wherever the starts differed clearly, but picked the
   worse one for B45 on DBLP (0.667 vs 0.738).
-- No real dataset in the repo yet shows edge attributes helping clustering beyond topology and features.
+- In E3 no tested real dataset shows B45 helping clustering beyond topology and features; see the E6/E8 follow-up below.
 
 ### Round 2 (same day): robustness, real-data headroom, contextual edges
 
@@ -99,7 +136,8 @@ residual, the SE edge weights or the adaptive alpha, or weakening the residual, 
 is exactly the `b31_dualscalar_assign` preset, which is now the `run_preset.py` default.
 
 **E5, how much can edge attributes help at all?** `tools/screen_edge_headroom.py` fits P(same label | edge_attr) with
-labels and reweights the graph with it, an upper bound for context-free reweighting:
+labels and reweights the graph with it, a label-informed headroom diagnostic for context-free reweighting
+(not a mathematical upper bound or an unsupervised result):
 
 | dataset | AUC edge_attr / endpoint cosine | SGC plain → reweighted | spectral plain → reweighted |
 |---|---|---|---|
@@ -157,11 +195,80 @@ SE losses of edge-aware models are computed on their own reweighted graphs and p
 | urban_paris_plot_v3bsjg | n/a | 0.049 | 0.023 | 0.039 (k=32) | 0.055 | 0.035 (warm) | 0.036 (warm) | — | 0.025 (warm) |
 | acm_multiplex_v2 | n/a | 0.391 | 0.566 | 0.394 (k=8) | 0.549 | 0.464±0.002 (warm) | 0.491±0.006 (warm) | 0.519±0.001 (warm) | 0.494±0.004 (warm) |
 
-- **B31+ctx is the best edge-aware variant**: it never collapses and beats the baseline on Cora (+0.04, also above Louvain and
+- **B31+ctx is the strongest edge-aware setting in E6/E8**: under this selected-start protocol it avoids the B45 collapse and beats the baseline on Cora (+0.04, also above Louvain and
   SGC), DBLP (+0.006) and ACM (+0.055), but trails it on Photo (−0.04) and AIFB (−0.03).
 - ACM's layer headroom is mostly not captured (0.519 vs spectral 0.566 vs 0.71 with the citation layer alone), for the
   reason above.
 - Neither modularity nor SE loss reliably chooses *between* models without labels; the baseline is the safe default.
+
+### E9: removing learned weights from the SE graph
+
+`configs/breakthrough/e9_fixed_ruler.json` tests B31 with `--edge_weight_learn_apply_to msg_only` (`b31fr`),
+with and without endpoint context (`b31frctx`). Learned scalar factors act on the message graph only. The SE graph
+retains its base weights and learned top-k augmentation, so “fixed ruler” means **no learned scalar SE reweighting**,
+not a frozen graph or a detached encoder. The assignment residual and edge-weight regularizer remain active.
+
+The same baseline-guided start rule as E6/E8 gives the following NMI. Cora, DBLP and ACM use three training seeds;
+Photo and AIFB use seed 0. `±` is the population standard deviation across seed-level means; each run averages
+three stochastic decodes. The [tracked selected-run table](configs/breakthrough/evidence/real_selected.csv)
+records each seed and start.
+
+| dataset | selected start | baseline | B31 | B31 msg_only | B31+ctx | B31+ctx msg_only |
+|---|---|---|---|---|---|---|
+| cora | nowarm | 0.430±0.020 | 0.404±0.024 | 0.437±0.036 | 0.472±0.016 | 0.472±0.009 |
+| photo | warm | 0.637 | 0.552 | 0.550 | 0.598 | 0.591 |
+| dblp_magnn_author_v2 | warm | 0.759±0.002 | 0.749±0.007 | 0.759±0.001 | 0.765±0.010 | 0.760±0.009 |
+| entities_aifb | warm | 0.158 | 0.131 | 0.134 | 0.126 | 0.138 |
+| acm_multiplex_v2 | warm | 0.464±0.002 | 0.491±0.006 | 0.493±0.002 | 0.519±0.001 | 0.479±0.013 |
+
+This does not solve real-data edge selection: Photo/AIFB still trail the baseline, and ACM with context gets worse.
+The plan also contains 48 synthetic runs, but the local result ledger contains only the 44 real-graph runs above.
+There is no E9 synthetic conclusion yet.
+
+`e9x_machine_check` reruns two warm, seed-0 configurations on an RTX 4060 Laptop: Cora changes from 0.4344 to
+0.4511 and DBLP from 0.7600 to 0.7607. Pseudo-partition NMI is unchanged. This is a two-run drift check, not proof of
+cross-device determinism; see [machine_check.csv](configs/breakthrough/evidence/machine_check.csv).
+
+### E10: does the SE objective prefer the target partition?
+
+`tools/check_se_alignment.py` compares the label partition's two-level SE with the lower SE of spectral and
+SGC+KMeans partitions at the same class count, for a finite set of candidate edge weightings. Its
+`label_gap = SE(label) − min(SE(spectral), SE(SGC))` is diagnostic: a positive gap favours a tested non-label
+partition. It does not find the global minimum or establish a causal explanation of a trained model.
+
+On ACM, the SE-preferred candidate is `layer+PAP` (NMI 0.5572, gap +0.0989), whereas `layer+PcP` has gap −0.0142.
+On direct synthetic graphs, `+attr0` is preferred and reaches NMI 0.7242 / 0.9097 at h45 / h55. These examples support
+an objective-alignment concern, but DBLP's SE-preferred venue weighting also reaches NMI 0.7662: the relationship is
+dataset-dependent. The full small screen is tracked in [se_alignment.csv](configs/breakthrough/evidence/se_alignment.csv).
+Labels are used only in this screen; graphs containing `-1` labels are skipped.
+
+### B45 follow-up: collapse mechanism, not a merged fix
+
+`tools/diagnose_b45_message_gate.py` adds checkpoint interventions, graph-cross probes and paired short training
+without changing the production gate. On Photo, seed 0, a common initialization and fixed SGC pseudo partition
+are used for 200 warm-start + 200 SE epochs. Full decoding at the final epoch uses seed 999; NMI never selects a checkpoint.
+
+| intervention | final decode NMI |
+|---|---|
+| original B45 | 0.0070 |
+| bypass message gate | 0.6416 |
+| unit gate factor (normalization retained) | 0.0080 |
+| remove post-gate degree normalization | 0.6419 |
+| remove gate dropout | 0.0058 |
+| preserve transformed features at isolated aggregation rows | 0.6418 |
+
+Checkpoint graph-cross probes localize the mismatch to the leaf embeddings: Photo has NMI 0.6052 with the training's
+augmented embedding graph and 0.0052 with the base graph used for decoding. Changing only the assignment graph
+does not rescue base-graph embeddings. About 98.5% of new directed edges target originally isolated nodes;
+post-gate normalization increases the new-edge weight share from 3.56% to roughly 31–41%.
+These are different checkpoints/protocols from the paired short-training table and should not be combined into one score.
+
+The AIFB checkpoint shows the same direction of mismatch; DBLP does not. The DBLP paired-training probe was interrupted
+by resource contention and is excluded. This is single-seed diagnostic evidence; the `safe_isolates` hook and normalization
+interventions have **not** been adopted in `modules/layers.py` or validated at the full benchmark budget.
+See the [intervention](configs/breakthrough/evidence/b45_gate_interventions.csv),
+[graph-cross](configs/breakthrough/evidence/b45_graph_cross.csv) and
+[graph-statistics](configs/breakthrough/evidence/b45_graph_stats.csv) tables.
 
 ### Retired in this pass
 
@@ -181,13 +288,12 @@ SE losses of edge-aware models are computed on their own reweighted graphs and p
 
 ### Open problems, in priority order
 
-1. **Steering SE edge weighting toward label-relevant structure**: SE rewards whatever edges form crisp communities
-   (ACM: it upweights the least homophilous layer). Candidate label-free signals: feature consistency (PSP edges have the
-   lowest endpoint similarity on ACM, but the term layer, built from features, has the highest), or constraints that keep
-   per-type volume. This is the main obstacle to real-data gains.
-2. **A safe message gate**: the gate is what lets B45 exploit informative edges (h45 direct 0.729 vs B31 0.616; contextual
-   0.708 with context) and also what collapses Photo/AIFB. A gate that stays off until the backbone has left the plateau, or
-   that falls back to identity when edges look uninformative, would combine both.
+1. **Aligning the objective and edge selection with useful structure**: E9 removes scalar reweighting from the SE graph
+   without a general gain. E10 shows that SE-preferred candidates need not be the label-relevant ones. Feature consistency
+   and per-type volume constraints remain hypotheses to test, especially on ACM.
+2. **Fixing train/decode geometry before redesigning the gate**: validate isolated-row handling and graph normalization
+   in a consistent training/inference path, then rerun B45 at full budget across seeds. The Photo hooks are promising
+   diagnostics, not a replacement benchmark. Preserve direct/contextual synthetic edge gains when testing a fix.
 3. **Model selection without labels**: the baseline-guided start rule works; choosing between baseline, B31+ctx and B45 does not
    (modularity and SE loss both prefer the wrong run on DBLP).
 4. **Backbone vs simple baselines**: DSE still trails spectral clustering on ACM (0.46-0.52 vs 0.566) and SGC on weak-feature
@@ -201,15 +307,27 @@ SE losses of edge-aware models are computed on their own reweighted graphs and p
 uv venv --python 3.11 .venv
 uv pip sync --python .venv/bin/python --torch-backend cu129 requirements.uv.lock.txt
 
-# one run with the converged defaults (2000 epochs, hid 512; default preset b31_dualscalar_assign)
+# edge-free control, then the runner's default B31 (2000 epochs, hid 512)
+.venv/bin/python tools/run_preset.py --preset baseline_v1 --dataset cora --seed 0 --gpu 0
 .venv/bin/python tools/run_preset.py --dataset cora --seed 0 --gpu 0
 .venv/bin/python tools/run_preset.py --list_presets   # baseline_v1, b31_dualscalar_assign, b45_v31_msgcond_gs050
 
-# best edge-aware setting found so far: B31 + endpoint context, with the warm start where the baseline's SE loss prefers it
+# B31 + endpoint context; DBLP v2 must first be built (see the dataset guide)
 .venv/bin/python tools/run_preset.py --dataset dblp_magnn_author_v2 --epochs 1000 --warm_start auto --edge_ctx_dim 32
+
+# preview a command without training
+.venv/bin/python tools/run_preset.py --preset baseline_v1 --dataset cora --dry_run
 ```
 
-See `UV_ENVIRONMENTS.txt` for why torch is pinned to 2.8.0.
+Run commands from the repository root. See [UV_ENVIRONMENTS.txt](UV_ENVIRONMENTS.txt) for the Python 3.11 /
+PyTorch 2.8.0 CUDA 12.9 / matching torch-scatter environment. `requirements.txt` is the broad dependency list;
+`requirements.uv.lock.txt` records the tested versions. This lock targets Linux/WSL with CUDA; it is not a generic CPU lock.
+For CPU runs in a compatible environment use `main.py --no_gpu`; `--gpu 0` selects a GPU rather than disabling it.
+The direct `main.py` training defaults differ from `run_preset.py`, so prefer a preset or a plan for comparisons.
+
+`run_preset.py` starts cold by default. It does not automatically train both starts. For unknown dataset names, supply
+`--max_nums`; use the JSON plans for paired starts and parameters such as `edge_weight_learn_apply_to` that the
+convenience runner does not expose as command-line overrides.
 
 ## Reproducing the breakthrough pass
 
@@ -217,31 +335,52 @@ See `UV_ENVIRONMENTS.txt` for why torch is pinned to 2.8.0.
 DATA=data
 # synthetic benchmark (writes synth_ctx_v1_* into $DATA)
 .venv/bin/python tools/prepare_synth_ctx_datasets.py --root_path "$DATA" --feature_sep 0.35 --homophily 0.45,0.55
+# real multiplex benchmark (prepare before E6/E8/E9)
+.venv/bin/python tools/prepare_pyg_multiplex_dataset.py --root_path "$DATA" --dataset acm --name acm_multiplex_v2 --psp_sample_k 20
 # classic floors
-.venv/bin/python tools/run_classic_baselines.py --root_path "$DATA" --datasets cora,photo,dblp_magnn_author_v2 \
+.venv/bin/python tools/run_classic_baselines.py --root_path "$DATA" \
+  --datasets cora,photo,dblp_magnn_author_v2,entities_aifb,urban_paris_plot_v3bsjg \
   --out_csv results/breakthrough_v1/e3_real_dual/classic_baselines.csv
-# experiment plans (parallel jobs on one GPU; finished runs are cached)
+.venv/bin/python tools/run_classic_baselines.py --root_path "$DATA" --datasets acm_multiplex_v2 \
+  --out_csv results/breakthrough_v1/e6_b31_robust/classic_acm_v2.csv
+# experiment plans (requires all named real datasets and the E2 expert code copies described below)
 for plan in e1_backbone_gate e2d_plateau_diag e2_synth_ctx_warm e3_real_dual e4_b45_collapse_ablation \
             e6_b31_robust e7_ctx_edge e8_ctx_real; do
   .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/$plan.json --root_path "$DATA" --max_parallel 4
 done
+# E9: run the real-graph subset with recorded evidence; omit --only_tags to include the uncompleted synthetic jobs
+.venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e9_fixed_ruler.json --root_path "$DATA" \
+  --only_tags b31fr_warm,b31fr_nowarm,b31frctx_warm,b31frctx_nowarm --max_parallel 4
 .venv/bin/python tools/report_e2_mechanism.py --extra_dirs results/breakthrough_v1/e6_b31_robust,results/breakthrough_v1/e7_ctx_edge
-.venv/bin/python tools/report_e3_real.py --extra_dirs results/breakthrough_v1/e6_b31_robust,results/breakthrough_v1/e8_ctx_real \
+.venv/bin/python tools/report_e3_real.py --extra_dirs results/breakthrough_v1/e6_b31_robust,results/breakthrough_v1/e8_ctx_real,results/breakthrough_v1/e9_fixed_ruler \
   --extra_classic results/breakthrough_v1/e6_b31_robust/classic_acm_v2.csv \
-  --datasets cora,photo,dblp_magnn_author_v2,entities_aifb,urban_paris_plot_v3bsjg,acm_multiplex_v2
-# real-data headroom and multiplex graphs
-.venv/bin/python tools/prepare_pyg_multiplex_dataset.py --dataset acm --name acm_multiplex_v2 --psp_sample_k 20
+  --datasets cora,photo,dblp_magnn_author_v2,entities_aifb,urban_paris_plot_v3bsjg,acm_multiplex_v2 \
+  --out_dir results/breakthrough_v1/combined_real
+# label-informed diagnostics (not training)
 .venv/bin/python tools/screen_edge_headroom.py --datasets cora,photo,dblp_magnn_author_v2,acm_multiplex_v2 --out_csv results/breakthrough_v1/e5_headroom/headroom.csv
+.venv/bin/python tools/check_se_alignment.py --datasets cora,photo,dblp_magnn_author_v2,acm_multiplex_v2 \
+  --out_csv results/breakthrough_v1/e10_se_alignment/se_alignment.csv
 .venv/bin/python tools/inspect_edge_factors.py --run_dir results/breakthrough_v1/e6_b31_robust/runs/b31_warm__acm_multiplex_v2__s0
 ```
 
 `e2_synth_ctx_warm` runs EP1/EP2 from copies of the archived expert workspaces under `results/breakthrough_v1/_code/`
-(the copies add the warm start through an encoder hook). Keep `--max_parallel` at 4 for graphs above ~5k nodes: under WSL
+(the local copies add the warm start through an encoder hook and are not included in a clean Git clone). Restore those
+copies to reproduce EP1/EP2; B31/B45 and baseline jobs use the root code. E1/E2d also reference deprecated synthetic
+datasets, which can be rebuilt with `tools/prepare_mechanism_synth_datasets.py` for historical checks only.
+DBLP, Entities and Urban prepared graphs are prerequisites; use the builders below and
+[data/README.md](data/README.md). Urban raw city data must be supplied separately. Reports require their input
+`runs.csv` and classic-baseline CSVs; a fresh clone has the compact evidence snapshots, not these raw outputs.
+
+Use `--dry_run` to inspect a plan before launching it. Finished runs are cached by the presence of their metrics file;
+use a new plan name or `--force` after changing code or parameters. Keep `--max_parallel` at 4 or lower for graphs above ~5k nodes: under WSL
 an over-committed GPU pages to host memory instead of raising OOM and every job slows to a crawl.
+
+Checkpoint diagnostics and the paired Photo training example are listed in [tools/README.md](tools/README.md).
+The machine-check plan runs on the current host; it does not connect to another machine automatically.
 
 ## Dataset Guide (Type, Location, Commands)
 
-Data is expected under `--root_path` (default `data/`). `data/` is an fstab bind mount of a D: mirror folder; see
+Data is expected under `--root_path` (default `data/`). On the original workstation, `data/` is an fstab bind mount of a D: mirror folder; see
 `DATA_ASSETS.md` for the physical location, the F: backup and verification.
 
 For a concise inventory of what each current dataset means, see [DATASETS.md](DATASETS.md).
@@ -253,22 +392,32 @@ These run directly and are downloaded by PyG loaders when missing:
 - `cora`, `citeseer`, `pubmed`, `computers`, `photo`
 
 ```bash
-python3 tools/run_preset.py --dataset cora --seed 0 --gpu 0
+.venv/bin/python tools/run_preset.py --dataset cora --seed 0 --gpu 0
 ```
 
 ### 2) Current active construction scripts
 
 The active top-level `tools/` surface now keeps only the builders that still matter for the current mainline and current data-construction series.
 
-1. PyG DBLP (MAGNN-style author graph)
+#### DBLP (MAGNN-style author graph)
 - raw: auto-downloaded by script
 - output: `data/dblp_magnn_author` or `data/dblp_magnn_author_v2`
 
 ```bash
-python3 tools/prepare_pyg_dblp_magnn_dataset.py --root data/pyg_dblp --out_root data --name dblp_magnn_author_v2 --mode v2
+.venv/bin/python tools/prepare_pyg_dblp_magnn_dataset.py --root data/pyg_dblp --out_root data --name dblp_magnn_author_v2 --mode v2
 ```
 
-2. Urban plot graph
+#### Multiplex graphs and the current synthetic benchmark
+
+```bash
+.venv/bin/python tools/prepare_pyg_multiplex_dataset.py --dataset acm --name acm_multiplex_v2 --psp_sample_k 20
+.venv/bin/python tools/prepare_synth_ctx_datasets.py --feature_sep 0.35 --homophily 0.45,0.55
+```
+
+The synthetic generator defaults to `feature_sep=0.25` and also includes h70; pass the explicit options above to
+recreate the documented benchmark. ACM v2 samples PSP neighbours; use v2 for the reported E6–E9 comparisons.
+
+#### Urban plot graphs
 - raw expected: `data/urban_network_datasets/<city>/...`
 - output: `data/urban_<city>_plot_v3*`
 
@@ -280,10 +429,10 @@ python3 tools/prepare_pyg_dblp_magnn_dataset.py --root data/pyg_dblp --out_root 
 # design note:
 # - feature similarity does not create edges in V3
 # - shared-building overlap is kept only as an edge attribute
-python3 tools/prepare_urban_plot_graph_v3.py --city beijing --urban_root data/urban_network_datasets --out_root data --variant v3sjg
+.venv/bin/python tools/prepare_urban_plot_graph_v3.py --city beijing --urban_root data/urban_network_datasets --out_root data --variant v3sjg
 
 # batch-build all cities and all V3 variants
-python3 tools/run_urban_plot_graph_v3_series.py --force --summary_dir results/data_construction_series/urban_plot_v3_series
+.venv/bin/python tools/run_urban_plot_graph_v3_series.py --force --summary_dir results/data_construction_series/urban_plot_v3_series
 
 # refined V3b graph builders
 # edge schema changes:
@@ -291,10 +440,10 @@ python3 tools/run_urban_plot_graph_v3_series.py --force --summary_dir results/da
 # - endpoint context is symmetric via sum/gap features
 # - geometry keeps orientation_diff
 # - node feature relations (cosine, l2) stay descriptive only
-python3 tools/prepare_urban_plot_graph_v3b.py --city beijing --urban_root data/urban_network_datasets --out_root data --variant v3bsjg
+.venv/bin/python tools/prepare_urban_plot_graph_v3b.py --city beijing --urban_root data/urban_network_datasets --out_root data --variant v3bsjg
 
 # batch-build all cities and all V3b variants
-python3 tools/run_urban_plot_graph_v3b_series.py --force --summary_dir results/data_construction_series/urban_plot_v3b_series
+.venv/bin/python tools/run_urban_plot_graph_v3b_series.py --force --summary_dir results/data_construction_series/urban_plot_v3b_series
 
 # new plot-centric heterogeneous urban dataset
 # node types:
@@ -305,15 +454,15 @@ python3 tools/run_urban_plot_graph_v3b_series.py --force --summary_dir results/d
 # - street-intersection incidence
 # - plot-building containment
 # - building-building kNN proximity
-python3 tools/prepare_urban_plot_hetero_v1.py --city beijing --urban_root data/urban_network_datasets --out_root data
-python3 tools/validate_urban_plot_hetero_v1.py --dataset_dir data/urban_beijing_plot_hetero_v1
+.venv/bin/python tools/prepare_urban_plot_hetero_v1.py --city beijing --urban_root data/urban_network_datasets --out_root data
+.venv/bin/python tools/validate_urban_plot_hetero_v1.py --dataset_dir data/urban_beijing_plot_hetero_v1
 
 # richer hetero v2 dataset
 # keeps the same four node types, but upgrades each relation with typed edge_attr
 # and adds separate spatial / semantic building-building relations
-python3 tools/prepare_urban_plot_hetero_v2.py --city paris --urban_root data/urban_network_datasets --out_root data
-python3 tools/validate_urban_plot_hetero_v1.py --dataset_dir data/urban_paris_plot_hetero_v2
-python3 tools/smoke_test_urban_plot_hetero_v2.py --dataset_dir data/urban_paris_plot_hetero_v2
+.venv/bin/python tools/prepare_urban_plot_hetero_v2.py --city paris --urban_root data/urban_network_datasets --out_root data
+.venv/bin/python tools/validate_urban_plot_hetero_v1.py --dataset_dir data/urban_paris_plot_hetero_v2
+.venv/bin/python tools/smoke_test_urban_plot_hetero_v2.py --dataset_dir data/urban_paris_plot_hetero_v2
 ```
 
 Archived conversion scripts:
@@ -347,13 +496,13 @@ Then run:
 
 ```bash
 # If data is placed under data/<dataset_name>/
-python3 tools/run_preset.py --dataset <dataset_name> --max_nums 12 --seed 0 --gpu 0
+.venv/bin/python tools/run_preset.py --dataset <dataset_name> --max_nums 12 --seed 0 --gpu 0
 
 # If data is placed under data/custom/<dataset_name>/
-python3 main.py --dataset <dataset_name> --root_path data/custom --max_nums 12 --gpu 0 --edge_variant V1 --epochs 2000 --hid_dim 512 --w_decay 0 --temperature 1.0 --warm_start auto
+.venv/bin/python main.py --dataset <dataset_name> --root_path data/custom --max_nums 12 --gpu 0 --edge_variant V1 --epochs 2000 --hid_dim 512 --w_decay 0 --temperature 1.0 --warm_start auto
 
 # Example (replace with your real name)
-python3 tools/run_preset.py --dataset my_graph_v1 --max_nums 12 --seed 0 --gpu 0
+.venv/bin/python tools/run_preset.py --dataset my_graph_v1 --max_nums 12 --seed 0 --gpu 0
 ```
 
 ## Archive

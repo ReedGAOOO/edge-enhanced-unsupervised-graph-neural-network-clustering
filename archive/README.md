@@ -2,6 +2,10 @@
 
 This folder keeps branch-era material that is no longer part of the active repo surface.
 
+Updated 2026-10-15. Start with the [current project README](../README.md), [active configurations](../configs/README.md)
+and [experiment index](../configs/breakthrough/README.md). README files inside historical workspaces and upstream
+snapshots retain their original context; they are not updated to describe the current implementation.
+
 ## Layout
 
 - `docs/`
@@ -30,3 +34,5 @@ This folder keeps branch-era material that is no longer part of the active repo 
 - Historical branch exploration, obsolete reports, older raw campaign outputs, and older data variants are moved here.
 - Historical preset JSONs and legacy dataset builders are archived here as well.
 - Some archived CSVs may still preserve the original execution paths used when the runs were created.
+- Archived results/checkpoint links may point to an old Windows drive letter. See [DATA_ASSETS.md](../DATA_ASSETS.md)
+  for known locations and limitations; an archive README does not imply its payload is present in a clean clone.

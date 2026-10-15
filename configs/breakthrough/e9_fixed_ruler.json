@@ -1,0 +1,208 @@
+{
+  "name": "e9_fixed_ruler",
+  "description": "Fixed ruler: B31 with edge_weight_learn_apply_to=msg_only. Learned scalar factors shape only the message graph; the SE graph retains base weights and learned augmentation without scalar reweighting. Tests whether this keeps B31 at or above the baseline on real graphs, and whether synthetic gains survive. Compare real tags with e6 b31_* / e8 b31ctx_* and e3 baseline_*, synth tags with e6 b31_synth and e7 b31_ctx.",
+  "seeds": [
+    0
+  ],
+  "max_nums_default": 6,
+  "max_nums": {
+    "cora": 10,
+    "photo": 10,
+    "dblp_magnn_author_v2": 12,
+    "entities_aifb": 16,
+    "acm_multiplex_v2": 6
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "b31fr_warm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "cora",
+        "dblp_magnn_author_v2",
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31fr_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo",
+        "entities_aifb"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31fr_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "cora",
+        "dblp_magnn_author_v2",
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31fr_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo",
+        "entities_aifb"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31frctx_warm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "cora",
+        "dblp_magnn_author_v2",
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31frctx_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo",
+        "entities_aifb"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31frctx_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "cora",
+        "dblp_magnn_author_v2",
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "edge_ctx_dim": 32,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31frctx_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo",
+        "entities_aifb"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "edge_ctx_dim": 32,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31fr_synth",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "synth_ctx_v1_h45_none_ds00",
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h45_direct_ds00_permEA",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h45_contextual_ds00_permEA",
+        "synth_ctx_v1_h55_none_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00_permEA",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00_permEA"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "epochs": 1500,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31frctx_synth",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "synth_ctx_v1_h45_none_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h45_contextual_ds00_permEA",
+        "synth_ctx_v1_h55_none_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00_permEA"
+      ],
+      "overrides": {
+        "edge_weight_learn_apply_to": "msg_only",
+        "epochs": 1500,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 64
+      }
+    }
+  ]
+}

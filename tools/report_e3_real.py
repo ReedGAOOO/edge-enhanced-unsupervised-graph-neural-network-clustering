@@ -2,7 +2,8 @@
 """Real-graph table for the README: dual-start DSE runs vs classic floors vs the pre-breakthrough numbers.
 
 For each (model, dataset, seed) the runner trained `<model>_warm` and `<model>_nowarm`. The start is chosen by the
-edge-free baseline's final SE training loss for that (dataset, seed) and applied to every model; no labels are used.
+edge-free baseline's best-checkpoint SE training loss for that (dataset, seed) and applied to every model;
+no class identities are used for this choice.
 """
 import argparse
 import csv
@@ -21,12 +22,15 @@ CLASSIC = ("kmeans_x", "spectral_a", "louvain_a", "sgc2_ax")
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--exp_dir", default="results/breakthrough_v1/e3_real_dual",
-                        help="Output directory; its runs.csv and classic_baselines.csv are always read.")
+                        help="Source experiment directory; its runs.csv and classic_baselines.csv are always read.")
     parser.add_argument("--extra_dirs", default="", help="Comma-separated experiment dirs whose runs are merged in.")
     parser.add_argument("--extra_classic", default="", help="Comma-separated extra classic-baseline CSVs.")
     parser.add_argument("--datasets", default="cora,photo,dblp_magnn_author_v2,entities_aifb,urban_paris_plot_v3bsjg")
+    parser.add_argument("--out_dir", default="", help="Where to write the tables (default: --exp_dir).")
     args = parser.parse_args()
     exp_dir = Path(args.exp_dir)
+    out_dir = Path(args.out_dir) if args.out_dir else exp_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
     runs = defaultdict(dict)
     run_rows = list(csv.DictReader(open(exp_dir / "runs.csv")))
     for extra in [d for d in args.extra_dirs.split(",") if d]:
@@ -66,7 +70,7 @@ def main() -> None:
         picked[(model, ds)].append((float(cands[chosen]["nmi_mean"]), chosen))
         for s in cands:
             picked[(model + f"[{s}]", ds)].append((float(cands[s]["nmi_mean"]), s))
-    with open(exp_dir / "dual_start_detail.csv", "w", newline="") as fh:
+    with open(out_dir / "dual_start_detail.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(detail[0].keys()))
         w.writeheader()
         w.writerows(detail)
@@ -81,7 +85,7 @@ def main() -> None:
         return f"{np.mean(nmi):.3f}±{np.std(nmi):.3f}{tag}" if len(nmi) > 1 else f"{nmi[0]:.3f}{tag}"
 
     datasets = [d for d in args.datasets.split(",") if d]
-    models = [m for m in ("baseline", "b31", "b31ctx", "b45") if any(k[0] == m for k in picked)]
+    models = [m for m in ("baseline", "b31", "b31fr", "b31ctx", "b31frctx", "b45") if any(k[0] == m for k in picked)]
     md = ["| dataset | old B45 (60 ep) | " + " | ".join(CLASSIC) + " | " + " | ".join(f"{m} (selected)" for m in models)
           + " | " + " | ".join(f"{m} warm / nowarm" for m in models) + " |",
           "|---|---|" + "---|" * len(CLASSIC) + "---|" * (2 * len(models))]
@@ -94,7 +98,7 @@ def main() -> None:
         md.append(f"| {ds} | {'n/a' if old is None else f'{old:.3f}'} | " + " | ".join(cl) + " | "
                   + " | ".join(cell((m, ds)) for m in models) + " | "
                   + " | ".join(f"{cell((m + '[warm]', ds))} / {cell((m + '[nowarm]', ds))}" for m in models) + " |")
-    (exp_dir / "real_table.md").write_text("\n".join(md) + "\n")
+    (out_dir / "real_table.md").write_text("\n".join(md) + "\n")
     print("\n".join(md))
 
 

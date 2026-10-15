@@ -115,8 +115,9 @@ parser.add_argument('--edge_weight_learn_logclip', type=float, default=0.8,
                     help='V20: absolute clip on learned edge log-ratio before exp mapping.')
 parser.add_argument('--edge_weight_learn_temp', type=float, default=1.0,
                     help='V20: temperature on learned edge score before tanh clipping.')
-parser.add_argument('--edge_weight_learn_apply_to', type=str, default='both', choices=['si_only', 'both'],
-                    help='V20: apply learned edge weighting to SI graph only, or both SI/message graphs.')
+parser.add_argument('--edge_weight_learn_apply_to', type=str, default='both', choices=['si_only', 'msg_only', 'both'],
+                    help='V20: apply learned edge weighting to SI graph only, or both SI/message graphs. '
+                         'msg_only (any learnable variant): omit learned scalar SE reweighting; retain graph augmentation.')
 parser.add_argument('--edge_attr_pool_topk', type=int, default=1,
                     help='For hierarchical edge-state pooling: use top-k assignment parents per endpoint (1 = hard argmax).')
 parser.add_argument('--edge_msg_conditioned', action='store_true',

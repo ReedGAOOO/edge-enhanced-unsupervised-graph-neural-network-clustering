@@ -1,6 +1,6 @@
 # Data Assets
 
-Last updated: 2026-10-13
+Last updated: 2026-10-15 (dataset-copy verification remains dated 2026-10-13)
 
 Large or ignored assets of this repo that are not stored in Git. Each `###` block is one asset; fields are single-line
 `- key: value` entries.
@@ -33,13 +33,15 @@ Large or ignored assets of this repo that are not stored in Git. Each `###` bloc
 ## Local, ignored by Git
 
 ### breakthrough_results
-- role: E1-E8 breakthrough-pass outputs (runs.csv, summary.csv, mechanism/real tables, classic floors, per-run logs and metrics)
-- location: results/breakthrough_v1/ (E1-E8 plus e5_headroom screening)
+- role: E1-E9 breakthrough-pass outputs, E9x machine checks, E10 SE-alignment screen and B45 gate diagnostics (ledgers, tables, logs, metrics and probe JSON)
+- location: results/breakthrough_v1/ (E1-E9, e5_headroom, e9x_machine_check, e10_se_alignment, b45_gate_diagnosis)
 - producer: tools/run_breakthrough.py with configs/breakthrough/*.json; tables from tools/report_e2_mechanism.py and tools/report_e3_real.py
-- status: unique local copy, no backup; headline numbers are copied into README.md
+- status: full raw outputs remain local with no backup recorded; headline numbers are in README.md and compact E9/E10/B45 evidence tables are tracked under configs/breakthrough/evidence/
 - notes: results/breakthrough_v1/_code/ holds patched copies of the expert1/expert2 workspaces (warm start via encoder hook) used for EP1/EP2
+- completion: E9 has 44 real-graph runs in its ledger; 48 planned synthetic runs have no recorded results; E9x has two runs; B45 DBLP paired training was interrupted and is excluded from conclusions
 
 ### breakthrough_checkpoints
 - role: model checkpoints written during breakthrough runs
-- location: checkpoints/breakthrough_v1/ (about 930 MB after E1-E8)
+- location: checkpoints/breakthrough_v1/ (historical size: about 930 MB after E1-E8; not a current size measurement)
 - status: regenerable from the plans; safe to delete
+- notes: checkpoint inspection/graph-cross tools need these matching files; preserve them when reproducing the documented gate diagnosis

@@ -131,14 +131,14 @@ def run_job(job: dict, plan: dict, args, out_root: Path) -> dict:
     results_dir = cwd / "results" / version
     row = {"run_id": run_id, "tag": job["tag"], "preset": job["preset"], "dataset": job["dataset"], "seed": job["seed"],
            "results_dir": str(results_dir.relative_to(REPO_ROOT))}
-    if (results_dir / f"{job['dataset']}_metrics.json").exists() and not args.force:
-        row.update(parse_run(results_dir, job["dataset"]))
-        row["status"] = "cached"
-        return row
     cmd = build_cmd(job, plan, args, version)
     if args.dry_run:
         print(" ".join(cmd))
         row["status"] = "dry_run"
+        return row
+    if (results_dir / f"{job['dataset']}_metrics.json").exists() and not args.force:
+        row.update(parse_run(results_dir, job["dataset"]))
+        row["status"] = "cached"
         return row
     results_dir.mkdir(parents=True, exist_ok=True)
     # The logger appends, so a log left by an interrupted attempt would mix two trajectories.
@@ -195,8 +195,9 @@ def main() -> None:
         keep = set(args.only_tags.split(","))
         jobs = [j for j in jobs if j["tag"] in keep]
     out_root = REPO_ROOT / "results" / "breakthrough_v1" / plan["name"]
-    out_root.mkdir(parents=True, exist_ok=True)
-    (out_root / "plan.json").write_text(json.dumps(plan, indent=2))
+    if not args.dry_run:
+        out_root.mkdir(parents=True, exist_ok=True)
+        (out_root / "plan.json").write_text(json.dumps(plan, indent=2))
     print(f"[plan] {plan['name']}: {len(jobs)} jobs -> {out_root}", flush=True)
 
     rows = []
