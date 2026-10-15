@@ -14,6 +14,8 @@ new README findings inspectable on GitHub. They are not full logs, checkpoints o
 | `spectral_stability.csv` | E15: plain vs regularized spectral NMI over five eigensolver starts, uniform graphs |
 | `selection_rules_summary.csv` | E18 summary of `tools/select_partition_rules.py` per rule and decision set (`cv-subset` = seed-0 decisions with edge-CV runs); R4 was defined after E18 |
 | `selection_rules_instances.csv` | E18 per-decision picks and NMI for every rule, the best candidate and the feature-gate statistic |
+| `selection_validation_summary.csv` | E19 summary on ten new decisions, rules frozen at `876486b` |
+| `selection_validation_instances.csv` | E19 per-decision picks and NMI for every rule, the best candidate and the feature-gate statistic |
 | `search_then_train.csv` | E14 (plain) and E16 (regularized) decoder choice per run, with each run's tag and training loss for the start rule |
 | `machine_check.csv` | Matching seed-0 `b31fr_warm` rows from E9 and E9x ledgers; two datasets, no pooling with the main benchmark |
 | `se_alignment.csv` | Direct copy of `e10_se_alignment/se_alignment.csv`; finite candidate-weighting screen using labels for diagnosis |

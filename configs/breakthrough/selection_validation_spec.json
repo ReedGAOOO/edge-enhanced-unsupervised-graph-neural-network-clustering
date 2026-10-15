@@ -1,0 +1,432 @@
+{
+ "description": "E19 validation decisions, unseen when the rules were designed.",
+ "instances": [
+  {
+   "id": "model/citeseer/s0",
+   "set": "model",
+   "dataset": "citeseer",
+   "seed": 0,
+   "cv_dataset": "citeseer_cv80",
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_warm__citeseer__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/baseline_warm__citeseer_cv80__s0"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19b_selection_validation/runs/b31_warm__citeseer__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/b31_warm__citeseer_cv80__s0"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19b_selection_validation/runs/b31ctx_warm__citeseer__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/b31ctx_warm__citeseer_cv80__s0"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19b_selection_validation/runs/b45nrctx_warm__citeseer__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/b45nrctx_warm__citeseer_cv80__s0"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/computers/s0",
+   "set": "model",
+   "dataset": "computers",
+   "seed": 0,
+   "cv_dataset": "computers_cv80",
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_warm__computers__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/baseline_warm__computers_cv80__s0"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19b_selection_validation/runs/b31_warm__computers__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/b31_warm__computers_cv80__s0"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19b_selection_validation/runs/b31ctx_warm__computers__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/b31ctx_warm__computers_cv80__s0"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19b_selection_validation/runs/b45nrctx_warm__computers__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/b45nrctx_warm__computers_cv80__s0"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/pubmed/s0",
+   "set": "model",
+   "dataset": "pubmed",
+   "seed": 0,
+   "cv_dataset": "pubmed_cv80",
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_nowarm__pubmed__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/baseline_nowarm__pubmed_cv80__s0"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19b_selection_validation/runs/b31_nowarm__pubmed__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/b31_nowarm__pubmed_cv80__s0"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19b_selection_validation/runs/b31ctx_nowarm__pubmed__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/b31ctx_nowarm__pubmed_cv80__s0"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19b_selection_validation/runs/b45nrctx_nowarm__pubmed__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/b45nrctx_nowarm__pubmed_cv80__s0"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/citeseer_sepick/s0",
+   "set": "decoder",
+   "dataset": "citeseer_sepick",
+   "seed": 0,
+   "cv_dataset": "citeseer_sepick_cv80",
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_nowarm__citeseer_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/baseline_nowarm__citeseer_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/computers_sepick/s0",
+   "set": "decoder",
+   "dataset": "computers_sepick",
+   "seed": 0,
+   "cv_dataset": "computers_sepick_cv80",
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_warm__computers_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/baseline_warm__computers_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/pubmed_sepick/s0",
+   "set": "decoder",
+   "dataset": "pubmed_sepick",
+   "seed": 0,
+   "cv_dataset": "pubmed_sepick_cv80",
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_nowarm__pubmed_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e19b_selection_validation/runs/baseline_nowarm__pubmed_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthctx_h45_ds01_sepick/s0",
+   "set": "decoder",
+   "dataset": "synthctx_h45_ds01_sepick",
+   "seed": 0,
+   "cv_dataset": "synthctx_h45_ds01_sepick_cv80",
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_synth__synthctx_h45_ds01_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_synth__synthctx_h45_ds01_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthctx_h55_ds01_sepick/s0",
+   "set": "decoder",
+   "dataset": "synthctx_h55_ds01_sepick",
+   "seed": 0,
+   "cv_dataset": "synthctx_h55_ds01_sepick_cv80",
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_synth__synthctx_h55_ds01_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_synth__synthctx_h55_ds01_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthxor_h45_ds01_sepick/s0",
+   "set": "decoder",
+   "dataset": "synthxor_h45_ds01_sepick",
+   "seed": 0,
+   "cv_dataset": "synthxor_h45_ds01_sepick_cv80",
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_synth__synthxor_h45_ds01_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_synth__synthxor_h45_ds01_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthxor_h55_ds01_sepick/s0",
+   "set": "decoder",
+   "dataset": "synthxor_h55_ds01_sepick",
+   "seed": 0,
+   "cv_dataset": "synthxor_h55_ds01_sepick_cv80",
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_synth__synthxor_h55_ds01_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e19a_selection_validation/runs/baseline_synth__synthxor_h55_ds01_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  }
+ ]
+}

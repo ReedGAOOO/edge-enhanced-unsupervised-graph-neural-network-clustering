@@ -19,7 +19,8 @@ The active branch is `breakthrough-2026-10`. Plans E1–E16 are recorded. The cu
   entropy picks a worse partition in 5 of 14 seed-0 decisions (Photo DSE 0.629 → spectral 0.453). Scoring candidates
   on 20% held-out edges after recomputing them on the rest (E17–E18) cuts the mean regret from 0.050 to 0.022, with one
   miss left (Photo again: real but label-misaligned graph structure). A feature-gated variant designed after seeing E18
-  has regret 0.004 there and still needs validation on new instances.
+  did not hold up on ten new decisions (E19: regret 0.025 against 0.031 for edge CV, two misses each); Amazon Computers
+  repeats Photo's failure. No label-free rule resolves label misalignment; report per-method results.
 - **Plain spectral clustering is unstable on graphs with more components than clusters** (Cora 78, Photo 136): NMI over
   five eigensolver starts spans 0.03–0.18 on Cora and 0.005–0.51 on Photo. `spectral_reg` removes this (E15).
 - **B45's message gate is fixed.** `--no-edge_msg_gate_renorm` removes the Photo collapse (0.004 → 0.634) and keeps
@@ -397,8 +398,37 @@ better, so it reflects real graph structure that the labels do not follow. The f
 AIFB, whose features compress held-out edges worse than a random partition (gate r = −0.44 / −0.59; 0.11–0.78 on the
 other datasets). R4 combines the two: rank by held-out and feature-graph structural entropy when a feature-only
 partition beats random on held-out edges (r > 0), otherwise use R2. It was designed with these 14 decisions in view,
-so its score is a hypothesis, not evidence. Rows: [selection_rules_summary.csv](configs/breakthrough/evidence/selection_rules_summary.csv),
+so its score is a hypothesis, not evidence; E19 below tests it. Rows: [selection_rules_summary.csv](configs/breakthrough/evidence/selection_rules_summary.csv),
 [selection_rules_instances.csv](configs/breakthrough/evidence/selection_rules_instances.csv).
+
+### E19: validating the selection rules on new decisions
+
+`tools/run_selection_validation.py` builds ten decisions none of the rules saw, with the rule code frozen at `876486b`:
+model choice on Citeseer, Amazon Computers and PubMed, decoder choice on their SE-searched graphs, and decoder choice on
+synthetic graphs drawn with data seed 1 (first-order and XOR contexts). It runs the search, writes the reweighted and
+edge-CV datasets, trains in two stages (`e19a_selection_validation.json`: baseline starts and synthetic runs;
+`e19b_selection_validation.json`: the other models and all CV runs at the baseline-chosen start), writes
+[selection_validation_spec.json](configs/breakthrough/selection_validation_spec.json) and scores it. Seed 0, one split:
+
+| rule | E18 mean regret (14) | E19 mean regret (10) | E19 regret > 0.05 | pooled 24 |
+|---|---|---|---|---|
+| R0 se | 0.050 | 0.034 | 2 | 0.043 |
+| R1 medoid | 0.060 | 0.033 | 2 | 0.049 |
+| R2 edge_cv | 0.022 | 0.031 | 2 | 0.026 |
+| R3 two_view | 0.052 | 0.018 | 1 | 0.038 |
+| R4 gated_cv | 0.004 (designed on these) | 0.025 | 2 | — |
+
+All rules agree on five of the ten new decisions (the four synthetic graphs and the Citeseer decoder), so E19 separates
+the rules less than E18, and ten decisions cannot resolve differences of a few hundredths. R4's advantage over R2 shrank
+from 0.018 to 0.006 with the same number of misses, so it is not adopted. Amazon Computers reproduces the Photo failure:
+regularized spectral clustering wins the decoder choice under every graph-based rule (0.388 against DSE 0.452) and the
+model choice under R0/R2 (0.394 against B31 0.556); its feature gate is positive (r = 0.08), yet the rank sum still
+prefers spectral. PubMed is weak for every method (0.22–0.27). Over the 24 decisions where R0–R3 were fixed in advance,
+edge cross-validation has the lowest regret, but no rule removes label misalignment. Rows:
+[selection_validation_summary.csv](configs/breakthrough/evidence/selection_validation_summary.csv),
+[selection_validation_instances.csv](configs/breakthrough/evidence/selection_validation_instances.csv).
+On a 24 GB GPU, PubMed- and Computers-sized graphs need `--max_parallel 2`: DSE's dense N×N score matrices take 8–10 GB
+per job below `knn_auto_threshold` (20,000 nodes), and four parallel jobs ran out of memory.
 
 ### Retired in this pass
 
@@ -421,8 +451,8 @@ so its score is a hypothesis, not evidence. Rows: [selection_rules_summary.csv](
 
 1. **Label-free choice between partition generators and models.** Structural entropy prefers the most compressible
    partition, whichever method produced it. Edge cross-validation (E18) removes the self-evaluation advantage but not
-   label misalignment (Photo). The feature-gated rule R4 must be validated on new datasets, split seeds and training
-   seeds before it is used; until then report R2 and the per-method results.
+   label misalignment (Photo, Amazon Computers). The feature-gated rule R4 did not validate (E19). Report per-method
+   results, with edge-CV selection as a secondary, modest improvement over in-sample SE (pooled regret 0.026 vs 0.043).
 2. **Higher-order contexts.** Exhaustive enumeration works but grows combinatorially (349 → 4,837 candidates at order 2
    with 34 context dims); gradients and beams need lower-order signal. A prior on which node attributes can carry context
    (categorical node types or roles) is the practical lever to test.
@@ -507,6 +537,8 @@ done
 .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e17_edge_cv.json --root_path "$DATA" --max_parallel 5
 .venv/bin/python tools/select_partition_rules.py --root_path "$DATA" --spec configs/breakthrough/selection_rules_spec.json \
   --out_dir results/breakthrough_v1/e18_selection_rules
+# E19: frozen-rule validation on new decisions (search, datasets, two training stages, scoring); 2 jobs per 24 GB GPU
+.venv/bin/python tools/run_selection_validation.py --max_parallel 2 --threads 4 --workers 16
 # E14/E16: write each pick (table in configs/breakthrough/README.md), train, choose decoders
 .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e16_search_then_train_reg.json --root_path "$DATA" --max_parallel 5
 .venv/bin/python tools/se_select_decoder.py --spectral reg --run_dirs results/breakthrough_v1/e16_search_then_train_reg/runs/*/ \

@@ -1,0 +1,86 @@
+{
+  "name": "e19a_selection_validation",
+  "description": "E19 stage 1: edge-free baseline warm/cold starts on Citeseer, Computers, PubMed and their SE-searched graphs; synthetic seed-1 searched graphs and their edge-CV graphs (warm).",
+  "seeds": [
+    0
+  ],
+  "max_nums_default": 6,
+  "max_nums": {
+    "citeseer": 9,
+    "citeseer_cv80": 9,
+    "citeseer_sepick": 9,
+    "citeseer_sepick_cv80": 9,
+    "computers": 12,
+    "computers_cv80": 12,
+    "computers_sepick": 12,
+    "computers_sepick_cv80": 12,
+    "pubmed": 5,
+    "pubmed_cv80": 5,
+    "pubmed_sepick": 5,
+    "pubmed_sepick_cv80": 5
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "citeseer",
+        "computers",
+        "pubmed",
+        "citeseer_sepick",
+        "computers_sepick",
+        "pubmed_sepick"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "citeseer",
+        "computers",
+        "pubmed",
+        "citeseer_sepick",
+        "computers_sepick",
+        "pubmed_sepick"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "baseline_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synthctx_h45_ds01_sepick",
+        "synthctx_h55_ds01_sepick",
+        "synthxor_h45_ds01_sepick",
+        "synthxor_h55_ds01_sepick",
+        "synthctx_h45_ds01_sepick_cv80",
+        "synthctx_h55_ds01_sepick_cv80",
+        "synthxor_h45_ds01_sepick_cv80",
+        "synthxor_h55_ds01_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    }
+  ]
+}

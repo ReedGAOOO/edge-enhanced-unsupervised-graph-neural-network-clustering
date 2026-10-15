@@ -1,0 +1,11 @@
+id,set,dataset,seed,oracle,oracle_nmi,feature_gate_r,se_pick,se_nmi,medoid_pick,medoid_nmi,edge_cv_pick,edge_cv_nmi,two_view_pick,two_view_nmi,gated_cv_pick,gated_cv_nmi
+model/citeseer/s0,model,citeseer,0,spectral@kcls,0.1662,0.0795,baseline,0.1463,b31ctx,0.0268,spectral@kcls,0.1662,baseline,0.1463,spectral@kcls,0.1662
+model/computers/s0,model,computers,0,b31,0.5563,0.0997,spectral@kcls,0.3937,b31ctx,0.4539,spectral@kcls,0.3937,b31,0.5563,b45nrctx,0.4594
+model/pubmed/s0,model,pubmed,0,sgc@kcls,0.269,0.4898,b31ctx,0.2218,b45nrctx,0.2284,b45nrctx,0.2284,b31ctx,0.2218,b45nrctx,0.2284
+decoder/citeseer_sepick/s0,decoder,citeseer_sepick,0,spectral@kdse,0.1967,0.0629,spectral@kdse,0.1967,spectral@kdse,0.1967,spectral@kdse,0.1967,spectral@kdse,0.1967,spectral@kdse,0.1967
+decoder/computers_sepick/s0,decoder,computers_sepick,0,dse,0.4521,0.0785,spectral@kdse,0.3882,dse,0.4521,spectral@kdse,0.3882,spectral@kdse,0.3882,spectral@kdse,0.3882
+decoder/pubmed_sepick/s0,decoder,pubmed_sepick,0,sgc@kcls,0.271,0.4889,dse,0.2244,dse,0.2244,dse,0.2244,dse,0.2244,dse,0.2244
+decoder/synthctx_h45_ds01_sepick/s0,decoder,synthctx_h45_ds01_sepick,0,sgc@kdse,0.7492,0.1877,sgc@kdse,0.7492,sgc@kdse,0.7492,sgc@kdse,0.7492,sgc@kdse,0.7492,sgc@kdse,0.7492
+decoder/synthctx_h55_ds01_sepick/s0,decoder,synthctx_h55_ds01_sepick,0,sgc@kdse,0.9018,0.0964,sgc@kdse,0.9018,sgc@kdse,0.9018,sgc@kdse,0.9018,sgc@kdse,0.9018,sgc@kdse,0.9018
+decoder/synthxor_h45_ds01_sepick/s0,decoder,synthxor_h45_ds01_sepick,0,sgc@kdse,0.7862,0.9358,sgc@kdse,0.7862,sgc@kdse,0.7862,sgc@kdse,0.7862,sgc@kdse,0.7862,sgc@kdse,0.7862
+decoder/synthxor_h55_ds01_sepick/s0,decoder,synthxor_h55_ds01_sepick,0,sgc@kdse,0.9021,0.7548,sgc@kdse,0.9021,sgc@kdse,0.9021,sgc@kdse,0.9021,sgc@kdse,0.9021,sgc@kdse,0.9021

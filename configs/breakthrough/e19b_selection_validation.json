@@ -1,0 +1,213 @@
+{
+  "name": "e19b_selection_validation",
+  "description": "E19 stage 2: B31, B31+ctx, B45 safe gate + ctx on the real graphs and all edge-CV runs, each at the start the edge-free baseline chose in stage 1.",
+  "seeds": [
+    0
+  ],
+  "max_nums_default": 6,
+  "max_nums": {
+    "citeseer": 9,
+    "citeseer_cv80": 9,
+    "citeseer_sepick": 9,
+    "citeseer_sepick_cv80": 9,
+    "computers": 12,
+    "computers_cv80": 12,
+    "computers_sepick": 12,
+    "computers_sepick_cv80": 12,
+    "pubmed": 5,
+    "pubmed_cv80": 5,
+    "pubmed_sepick": 5,
+    "pubmed_sepick_cv80": 5
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "citeseer_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "citeseer",
+        "citeseer_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31ctx_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "citeseer",
+        "citeseer_cv80"
+      ],
+      "overrides": {
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b45nrctx_warm",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "citeseer",
+        "citeseer_cv80"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "citeseer_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "computers_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "computers",
+        "computers_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31ctx_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "computers",
+        "computers_cv80"
+      ],
+      "overrides": {
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b45nrctx_warm",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "computers",
+        "computers_cv80"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "computers_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "pubmed_cv80"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "pubmed",
+        "pubmed_cv80"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31ctx_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "pubmed",
+        "pubmed_cv80"
+      ],
+      "overrides": {
+        "edge_ctx_dim": 32,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b45nrctx_nowarm",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "pubmed",
+        "pubmed_cv80"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "edge_ctx_dim": 32,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "pubmed_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    }
+  ]
+}

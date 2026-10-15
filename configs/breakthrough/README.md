@@ -22,6 +22,8 @@ tracked tables. Full training outputs and checkpoints are excluded from Git.
 | `e16_search_then_train_reg.json` | The same with the regularized-spectral picks (Cora, AIFB retrained) | 12/12 recorded on the RTX 4090 server |
 | `e17_edge_cv.json` | Seed-0 models of the selection benchmark retrained on graphs with 20% of edges held out | 29/29 recorded on the RTX 4090 server |
 | `selection_rules_spec.json` | Not a training plan: the 42 decisions scored by `tools/select_partition_rules.py` (E18) | Evaluated; results in the root README |
+| `e19a_selection_validation.json`, `e19b_selection_validation.json` | Written by `tools/run_selection_validation.py`: stage 1 (baseline starts, synthetic seed-1 runs) and stage 2 (other models, edge-CV runs) for ten new decisions | 20/20 and 24/24 recorded on the RTX 4090 server |
+| `selection_validation_spec.json` | The ten E19 decisions | Evaluated with the rules frozen at `876486b` |
 
 E5 headroom, E10 SE alignment, the B45 gate diagnosis, the E12 search, and E15 (spectral stability, regularized and beam
 search) are standalone tool runs, not missing numbered plan files. Their commands are documented in
