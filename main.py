@@ -116,8 +116,8 @@ parser.add_argument('--edge_weight_learn_logclip', type=float, default=0.8,
 parser.add_argument('--edge_weight_learn_temp', type=float, default=1.0,
                     help='V20: temperature on learned edge score before tanh clipping.')
 parser.add_argument('--edge_weight_learn_apply_to', type=str, default='both', choices=['si_only', 'msg_only', 'both'],
-                    help='V20: apply learned edge weighting to SI graph only, or both SI/message graphs. '
-                         'msg_only (any learnable variant): omit learned scalar SE reweighting; retain graph augmentation.')
+                    help='Where learned edge factors apply: both SI/message graphs, the SI (SE) graph only, or '
+                         'msg_only (omit learned scalar SE reweighting; retain graph augmentation).')
 parser.add_argument('--edge_attr_pool_topk', type=int, default=1,
                     help='For hierarchical edge-state pooling: use top-k assignment parents per endpoint (1 = hard argmax).')
 parser.add_argument('--edge_msg_conditioned', action='store_true',
@@ -130,6 +130,11 @@ parser.add_argument('--edge_msg_confidence_gate', action='store_true',
                     help='Shrink message gating on low-confidence edge-gate scores.')
 parser.add_argument('--edge_msg_confidence_temp', type=float, default=1.0,
                     help='Temperature for confidence-gated message conditioning.')
+parser.add_argument('--edge_msg_gate_renorm', action=argparse.BooleanOptionalAction, default=True,
+                    help='Re-normalize the gated message adjacency by degree (--no-edge_msg_gate_renorm keeps gate '
+                         'factors on the normalized adjacency).')
+parser.add_argument('--keep_isolated_nodes', action='store_true',
+                    help='Lorentz aggregation returns the input for nodes without neighbours instead of a zero vector.')
 parser.add_argument('--edge_attr_pool_confidence', action='store_true',
                     help='Use assignment-confidence weighting during hierarchical edge-state pooling.')
 parser.add_argument('--edge_attr_pool_conf_power', type=float, default=1.0,

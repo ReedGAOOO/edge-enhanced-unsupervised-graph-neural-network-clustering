@@ -11,6 +11,7 @@ from torch.optim import AdamW
 from data import load_data
 from logger import create_logger
 from modules.dsi import DSI
+from modules.layers import LorentzAgg
 from utils.eval_utils import cluster_metrics
 
 
@@ -151,7 +152,7 @@ class Exp:
         if hasattr(data, "edge_attr") and data.edge_attr is not None and data.edge_attr.dim() == 2:
             raw_edge_attr_dim = int(data.edge_attr.shape[1])
         edge_attr_dim = 3 if str(getattr(self.configs, "edge_variant", "V1")).upper() == "V40" else raw_edge_attr_dim
-        return DSI(
+        model = DSI(
             in_dim=data.x.shape[1],
             hid_dim=self.configs.hid_dim,
             num_nodes=data.x.shape[0],
@@ -194,6 +195,11 @@ class Exp:
             knn_mode=str(getattr(self.configs, "knn_mode", "auto")),
             knn_auto_threshold=int(getattr(self.configs, "knn_auto_threshold", 20000)),
         ).to(self.device)
+        for module in model.modules():
+            if isinstance(module, LorentzAgg):
+                module.gate_renorm = bool(getattr(self.configs, "edge_msg_gate_renorm", True))
+                module.keep_isolated = bool(getattr(self.configs, "keep_isolated_nodes", False))
+        return model
 
     def train(self):
         logger = create_logger(self.configs.log_path)
@@ -298,6 +304,8 @@ class Exp:
             "edge_msg_matched_only": bool(getattr(self.configs, "edge_msg_matched_only", False)),
             "edge_msg_confidence_gate": bool(getattr(self.configs, "edge_msg_confidence_gate", False)),
             "edge_msg_confidence_temp": float(getattr(self.configs, "edge_msg_confidence_temp", 1.0)),
+            "edge_msg_gate_renorm": bool(getattr(self.configs, "edge_msg_gate_renorm", True)),
+            "keep_isolated_nodes": bool(getattr(self.configs, "keep_isolated_nodes", False)),
             "edge_attr_pool_confidence": bool(getattr(self.configs, "edge_attr_pool_confidence", False)),
             "edge_attr_pool_conf_power": float(getattr(self.configs, "edge_attr_pool_conf_power", 1.0)),
             "edge_weight_learn_reg_lambda": float(getattr(self.configs, "edge_weight_learn_reg_lambda", 0.02)),

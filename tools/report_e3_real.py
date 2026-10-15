@@ -85,7 +85,7 @@ def main() -> None:
         return f"{np.mean(nmi):.3f}±{np.std(nmi):.3f}{tag}" if len(nmi) > 1 else f"{nmi[0]:.3f}{tag}"
 
     datasets = [d for d in args.datasets.split(",") if d]
-    models = [m for m in ("baseline", "b31", "b31fr", "b31ctx", "b31frctx", "b45") if any(k[0] == m for k in picked)]
+    models = [m for m in ("baseline", "b31", "b31fr", "b31si", "b31nores", "b31ctx", "b31frctx", "b45", "b45nrctx") if any(k[0] == m for k in picked)]
     md = ["| dataset | old B45 (60 ep) | " + " | ".join(CLASSIC) + " | " + " | ".join(f"{m} (selected)" for m in models)
           + " | " + " | ".join(f"{m} warm / nowarm" for m in models) + " |",
           "|---|---|" + "---|" * len(CLASSIC) + "---|" * (2 * len(models))]

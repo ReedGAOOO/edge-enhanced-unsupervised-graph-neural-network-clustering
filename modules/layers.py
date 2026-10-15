@@ -100,6 +100,12 @@ class LorentzAgg(nn.Module):
         self.edge_confidence_temp = float(max(1e-3, edge_confidence_temp))
         self.last_msg_gate_factor_mean = 1.0
         self.last_msg_gate_factor_std = 0.0
+        # Safety switches, set after construction by Exp.build_model. gate_renorm=False keeps the gate factors on the
+        # already-normalized adjacency instead of re-normalizing (re-normalization lets gates shift weight onto
+        # training-only augmentation edges). keep_isolated returns the input for rows with no neighbours instead of
+        # the off-manifold zero vector.
+        self.gate_renorm = True
+        self.keep_isolated = False
         if self.use_att:
             self.key_linear = LorentzLinear(manifold, in_dim, in_dim)
             self.query_linear = LorentzLinear(manifold, in_dim, in_dim)
@@ -159,7 +165,8 @@ class LorentzAgg(nn.Module):
             size=adj_sp.size(),
             device=adj_sp.device,
         ).coalesce()
-        gated = self._normalize_sparse_by_degree(gated)
+        if self.gate_renorm:
+            gated = self._normalize_sparse_by_degree(gated)
         if eff_mask is not None and torch.any(eff_mask):
             stat_factor = factor[eff_mask]
         else:
@@ -192,6 +199,9 @@ class LorentzAgg(nn.Module):
         denorm = (-self.manifold.inner(None, support_t, keepdim=True))
         denorm = denorm.abs().clamp_min(1e-8).sqrt()
         output = support_t / denorm
+        if self.keep_isolated:
+            degree = torch.sparse.sum(adj_eff.coalesce(), dim=1).to_dense() if adj_eff.is_sparse else adj_eff.sum(1)
+            output = torch.where((degree == 0).unsqueeze(1), x, output)
         return output
 
 

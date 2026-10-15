@@ -35,7 +35,7 @@ METRIC_KEYS = [
 
 
 # main.py flags declared with BooleanOptionalAction (default on); False must be spelled --no-<flag>.
-NEGATABLE_FLAGS = {"known_only_eval"}
+NEGATABLE_FLAGS = {"known_only_eval", "edge_msg_gate_renorm"}
 
 
 def preset_to_cli(preset: dict) -> list:
@@ -185,6 +185,8 @@ def main() -> None:
     parser.add_argument("--max_parallel", type=int, default=4)
     parser.add_argument("--threads", type=int, default=2, help="CPU threads per job.")
     parser.add_argument("--only_tags", type=str, default="", help="Comma-separated subset of tags to run.")
+    parser.add_argument("--num_shards", type=int, default=1, help="Split the expanded job list across machines.")
+    parser.add_argument("--shards", type=str, default="", help="Comma-separated shard ids (job index % num_shards) to run here.")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry_run", action="store_true")
     args = parser.parse_args()
@@ -194,6 +196,9 @@ def main() -> None:
     if args.only_tags:
         keep = set(args.only_tags.split(","))
         jobs = [j for j in jobs if j["tag"] in keep]
+    if args.num_shards > 1:
+        mine = {int(x) for x in args.shards.split(",") if x != ""}
+        jobs = [j for i, j in enumerate(jobs) if i % args.num_shards in mine]
     out_root = REPO_ROOT / "results" / "breakthrough_v1" / plan["name"]
     if not args.dry_run:
         out_root.mkdir(parents=True, exist_ok=True)

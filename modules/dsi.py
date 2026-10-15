@@ -293,7 +293,7 @@ class DSI(nn.Module):
         features = data.x
         adj = getattr(data, "adj_msg", data.adj).clone()
         base_edge_attr = getattr(data, "edge_attr", None)
-        if self._use_learnable_edge_weight_variant():
+        if self._use_learnable_edge_weight_variant() and self.edge_weight_learn_apply_to != 'si_only':
             head = 'msg' if self._use_dual_edge_weight_variant() else 'shared'
             adj, _ = self._apply_learned_edge_weight_to_adj(
                 base_adj=getattr(data, "adj_msg", data.adj),
@@ -325,7 +325,7 @@ class DSI(nn.Module):
         features = data.x
         adj = getattr(data, "adj_msg", data.adj).clone()
         base_edge_attr = getattr(data, "edge_attr", None)
-        if self._use_learnable_edge_weight_variant():
+        if self._use_learnable_edge_weight_variant() and self.edge_weight_learn_apply_to != 'si_only':
             head = 'msg' if self._use_dual_edge_weight_variant() else 'shared'
             adj, _ = self._apply_learned_edge_weight_to_adj(
                 base_adj=getattr(data, "adj_msg", data.adj),
@@ -460,14 +460,16 @@ class DSI(nn.Module):
                     normalize_for_message=False,
                     head='si',
                 )
-                adj_train_msg, reg_msg = self._apply_learned_edge_weight_to_adj(
-                    base_adj=adj_base_msg,
-                    target_adj=adj_train_msg,
-                    base_edge_attr=base_edge_attr,
-                    normalize_for_message=True,
-                    head='msg',
-                )
-                edge_reg_raw = 0.5 * (reg_si + reg_msg)
+                edge_reg_raw = reg_si
+                if self.edge_weight_learn_apply_to == 'both':
+                    adj_train_msg, reg_msg = self._apply_learned_edge_weight_to_adj(
+                        base_adj=adj_base_msg,
+                        target_adj=adj_train_msg,
+                        base_edge_attr=base_edge_attr,
+                        normalize_for_message=True,
+                        head='msg',
+                    )
+                    edge_reg_raw = 0.5 * (reg_si + reg_msg)
             else:
                 adj_train_si, reg_si = self._apply_learned_edge_weight_to_adj(
                     base_adj=adj_base_si,

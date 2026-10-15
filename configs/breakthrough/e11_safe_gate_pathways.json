@@ -1,0 +1,174 @@
+{
+  "name": "e11_safe_gate_pathways",
+  "description": "Small single-host follow-up. (A) Safe message gate: B45 + endpoint context with gate re-normalization off; the B45 gate diagnosis traced the Photo/AIFB collapse to re-normalized gates shifting weight onto training-only augmentation edges. Does the fixed gate keep B45's contextual gains (E7 b45_ctx 0.708 / 0.901) without collapsing on real graphs? (B) Which B31 pathway costs Photo/AIFB: assignment residual off or SE-graph-only learned factors (E9 covered message-only). (C) Seeds 1-2 for the Photo/AIFB references.",
+  "seeds": [
+    0
+  ],
+  "max_nums_default": 6,
+  "max_nums": {
+    "cora": 10,
+    "photo": 10,
+    "dblp_magnn_author_v2": 12,
+    "entities_aifb": 16,
+    "acm_multiplex_v2": 6
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "b45nrctx_synth",
+      "preset": "b45_v31_msgcond_gs050",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "synth_ctx_v1_h45_none_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h45_contextual_ds00_permEA",
+        "synth_ctx_v1_h55_none_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00_permEA"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500,
+        "edge_ctx_dim": 64
+      }
+    },
+    {
+      "tag": "b45nrctx_nowarm",
+      "preset": "b45_v31_msgcond_gs050",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "cora"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "warm_start": "none",
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b45nrctx_warm",
+      "preset": "b45_v31_msgcond_gs050",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "photo",
+        "dblp_magnn_author_v2",
+        "entities_aifb",
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31nores_warm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "photo",
+        "entities_aifb"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_attr_fusion_scale": 0.0
+      }
+    },
+    {
+      "tag": "b31si_warm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "datasets": [
+        "photo",
+        "entities_aifb"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_weight_learn_apply_to": "si_only"
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "seeds": [
+        1,
+        2
+      ],
+      "datasets": [
+        "photo",
+        "entities_aifb"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "seeds": [
+        1,
+        2
+      ],
+      "datasets": [
+        "photo",
+        "entities_aifb"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "seeds": [
+        1,
+        2
+      ],
+      "datasets": [
+        "photo",
+        "entities_aifb"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    }
+  ]
+}
