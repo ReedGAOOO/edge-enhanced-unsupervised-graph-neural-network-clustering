@@ -12,6 +12,8 @@ new README findings inspectable on GitHub. They are not full logs, checkpoints o
 | `se_search_plain.csv` | E12/E13 search summaries with plain spectral (real seed 0, AIFB seeds 1-4, synthetic seeds 0-2, XOR first and second order) and the 4090 Photo rerun |
 | `se_search_reg_beam.csv` | E15 search summaries with regularized spectral and a width-8 order-2 beam (real seeds 0-2; synthetic seed 0 with `--order2`) |
 | `spectral_stability.csv` | E15: plain vs regularized spectral NMI over five eigensolver starts, uniform graphs |
+| `selection_rules_summary.csv` | E18 summary of `tools/select_partition_rules.py` per rule and decision set (`cv-subset` = seed-0 decisions with edge-CV runs); R4 was defined after E18 |
+| `selection_rules_instances.csv` | E18 per-decision picks and NMI for every rule, the best candidate and the feature-gate statistic |
 | `search_then_train.csv` | E14 (plain) and E16 (regularized) decoder choice per run, with each run's tag and training loss for the start rule |
 | `machine_check.csv` | Matching seed-0 `b31fr_warm` rows from E9 and E9x ledgers; two datasets, no pooling with the main benchmark |
 | `se_alignment.csv` | Direct copy of `e10_se_alignment/se_alignment.csv`; finite candidate-weighting screen using labels for diagnosis |

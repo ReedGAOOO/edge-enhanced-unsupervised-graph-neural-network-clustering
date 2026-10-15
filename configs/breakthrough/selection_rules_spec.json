@@ -1,0 +1,1710 @@
+{
+ "description": "Selection-rule benchmark: model choice on five real graphs (baseline, B31, B31+ctx, B45 safe gate + ctx, regularized spectral, SGC) and decoder choice on the nine E14/E16 searched graphs (DSE vs regularized spectral / SGC at the DSE and class cluster counts). Seed 0 also has edge-CV runs (e17_edge_cv).",
+ "instances": [
+  {
+   "id": "model/cora/s0",
+   "set": "model",
+   "dataset": "cora",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e3_real_dual/runs/baseline_nowarm__cora__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_nowarm__cora_cv80__s0"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_nowarm__cora__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31_nowarm__cora_cv80__s0"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_nowarm__cora__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31ctx_nowarm__cora_cv80__s0"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_nowarm__cora__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b45nrctx_nowarm__cora_cv80__s0"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "cora_cv80"
+  },
+  {
+   "id": "model/cora/s1",
+   "set": "model",
+   "dataset": "cora",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e3_real_dual/runs/baseline_nowarm__cora__s1"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_nowarm__cora__s1"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_nowarm__cora__s1"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_nowarm__cora__s1"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/cora/s2",
+   "set": "model",
+   "dataset": "cora",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e3_real_dual/runs/baseline_nowarm__cora__s2"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_nowarm__cora__s2"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_nowarm__cora__s2"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_nowarm__cora__s2"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/photo/s0",
+   "set": "model",
+   "dataset": "photo",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e3_real_dual/runs/baseline_warm__photo__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_warm__photo_cv80__s0"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_warm__photo__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31_warm__photo_cv80__s0"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_warm__photo__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31ctx_warm__photo_cv80__s0"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__photo__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b45nrctx_warm__photo_cv80__s0"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "photo_cv80"
+  },
+  {
+   "id": "model/photo/s1",
+   "set": "model",
+   "dataset": "photo",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/baseline_warm__photo__s1"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b31_warm__photo__s1"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__photo__s1"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/photo/s2",
+   "set": "model",
+   "dataset": "photo",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/baseline_warm__photo__s2"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b31_warm__photo__s2"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__photo__s2"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/dblp_magnn_author_v2/s0",
+   "set": "model",
+   "dataset": "dblp_magnn_author_v2",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e3_real_dual/runs/baseline_warm__dblp_magnn_author_v2__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_warm__dblp_magnn_author_v2_cv80__s0"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_warm__dblp_magnn_author_v2__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31_warm__dblp_magnn_author_v2_cv80__s0"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_warm__dblp_magnn_author_v2__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31ctx_warm__dblp_magnn_author_v2_cv80__s0"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__dblp_magnn_author_v2__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b45nrctx_warm__dblp_magnn_author_v2_cv80__s0"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "dblp_magnn_author_v2_cv80"
+  },
+  {
+   "id": "model/dblp_magnn_author_v2/s1",
+   "set": "model",
+   "dataset": "dblp_magnn_author_v2",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e3_real_dual/runs/baseline_warm__dblp_magnn_author_v2__s1"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_warm__dblp_magnn_author_v2__s1"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_warm__dblp_magnn_author_v2__s1"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__dblp_magnn_author_v2__s1"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/dblp_magnn_author_v2/s2",
+   "set": "model",
+   "dataset": "dblp_magnn_author_v2",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e3_real_dual/runs/baseline_warm__dblp_magnn_author_v2__s2"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_warm__dblp_magnn_author_v2__s2"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_warm__dblp_magnn_author_v2__s2"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__dblp_magnn_author_v2__s2"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/entities_aifb/s0",
+   "set": "model",
+   "dataset": "entities_aifb",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e3_real_dual/runs/baseline_warm__entities_aifb__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_warm__entities_aifb_cv80__s0"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_warm__entities_aifb__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31_warm__entities_aifb_cv80__s0"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_warm__entities_aifb__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31ctx_warm__entities_aifb_cv80__s0"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__entities_aifb__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b45nrctx_warm__entities_aifb_cv80__s0"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "entities_aifb_cv80"
+  },
+  {
+   "id": "model/entities_aifb/s1",
+   "set": "model",
+   "dataset": "entities_aifb",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/baseline_warm__entities_aifb__s1"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b31_warm__entities_aifb__s1"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__entities_aifb__s1"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/entities_aifb/s2",
+   "set": "model",
+   "dataset": "entities_aifb",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/baseline_warm__entities_aifb__s2"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b31_warm__entities_aifb__s2"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__entities_aifb__s2"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/acm_multiplex_v2/s0",
+   "set": "model",
+   "dataset": "acm_multiplex_v2",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/baseline_warm__acm_multiplex_v2__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_warm__acm_multiplex_v2_cv80__s0"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_warm__acm_multiplex_v2__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31_warm__acm_multiplex_v2_cv80__s0"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_warm__acm_multiplex_v2__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b31ctx_warm__acm_multiplex_v2_cv80__s0"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__acm_multiplex_v2__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/b45nrctx_warm__acm_multiplex_v2_cv80__s0"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "acm_multiplex_v2_cv80"
+  },
+  {
+   "id": "model/acm_multiplex_v2/s1",
+   "set": "model",
+   "dataset": "acm_multiplex_v2",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/baseline_warm__acm_multiplex_v2__s1"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_warm__acm_multiplex_v2__s1"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_warm__acm_multiplex_v2__s1"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__acm_multiplex_v2__s1"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "model/acm_multiplex_v2/s2",
+   "set": "model",
+   "dataset": "acm_multiplex_v2",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "baseline",
+     "family": "baseline",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/baseline_warm__acm_multiplex_v2__s2"
+    },
+    {
+     "name": "b31",
+     "family": "b31",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e6_b31_robust/runs/b31_warm__acm_multiplex_v2__s2"
+    },
+    {
+     "name": "b31ctx",
+     "family": "b31ctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e8_ctx_real/runs/b31ctx_warm__acm_multiplex_v2__s2"
+    },
+    {
+     "name": "b45nrctx",
+     "family": "b45nrctx",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e11_safe_gate_pathways/runs/b45nrctx_warm__acm_multiplex_v2__s2"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/cora_sepick_reg/s0",
+   "set": "decoder",
+   "dataset": "cora_sepick_reg",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e16_search_then_train_reg/runs/baseline_nowarm__cora_sepick_reg__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_nowarm__cora_sepick_reg_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "cora_sepick_reg_cv80"
+  },
+  {
+   "id": "decoder/cora_sepick_reg/s1",
+   "set": "decoder",
+   "dataset": "cora_sepick_reg",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e16_search_then_train_reg/runs/baseline_nowarm__cora_sepick_reg__s1"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/cora_sepick_reg/s2",
+   "set": "decoder",
+   "dataset": "cora_sepick_reg",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e16_search_then_train_reg/runs/baseline_nowarm__cora_sepick_reg__s2"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/photo_sepick/s0",
+   "set": "decoder",
+   "dataset": "photo_sepick",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_warm__photo_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_warm__photo_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "photo_sepick_cv80"
+  },
+  {
+   "id": "decoder/photo_sepick/s1",
+   "set": "decoder",
+   "dataset": "photo_sepick",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_warm__photo_sepick__s1"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/photo_sepick/s2",
+   "set": "decoder",
+   "dataset": "photo_sepick",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_warm__photo_sepick__s2"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/dblp_sepick/s0",
+   "set": "decoder",
+   "dataset": "dblp_sepick",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_warm__dblp_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_warm__dblp_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "dblp_sepick_cv80"
+  },
+  {
+   "id": "decoder/dblp_sepick/s1",
+   "set": "decoder",
+   "dataset": "dblp_sepick",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_warm__dblp_sepick__s1"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/dblp_sepick/s2",
+   "set": "decoder",
+   "dataset": "dblp_sepick",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_warm__dblp_sepick__s2"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/aifb_sepick_reg/s0",
+   "set": "decoder",
+   "dataset": "aifb_sepick_reg",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e16_search_then_train_reg/runs/baseline_warm__aifb_sepick_reg__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_warm__aifb_sepick_reg_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "aifb_sepick_reg_cv80"
+  },
+  {
+   "id": "decoder/aifb_sepick_reg/s1",
+   "set": "decoder",
+   "dataset": "aifb_sepick_reg",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e16_search_then_train_reg/runs/baseline_warm__aifb_sepick_reg__s1"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/aifb_sepick_reg/s2",
+   "set": "decoder",
+   "dataset": "aifb_sepick_reg",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e16_search_then_train_reg/runs/baseline_warm__aifb_sepick_reg__s2"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/acm_sepick/s0",
+   "set": "decoder",
+   "dataset": "acm_sepick",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_warm__acm_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_warm__acm_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "acm_sepick_cv80"
+  },
+  {
+   "id": "decoder/acm_sepick/s1",
+   "set": "decoder",
+   "dataset": "acm_sepick",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_warm__acm_sepick__s1"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/acm_sepick/s2",
+   "set": "decoder",
+   "dataset": "acm_sepick",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_warm__acm_sepick__s2"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthctx_h45_sepick/s0",
+   "set": "decoder",
+   "dataset": "synthctx_h45_sepick",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthctx_h45_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_synth__synthctx_h45_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "synthctx_h45_sepick_cv80"
+  },
+  {
+   "id": "decoder/synthctx_h45_sepick/s1",
+   "set": "decoder",
+   "dataset": "synthctx_h45_sepick",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthctx_h45_sepick__s1"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthctx_h45_sepick/s2",
+   "set": "decoder",
+   "dataset": "synthctx_h45_sepick",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthctx_h45_sepick__s2"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthctx_h55_sepick/s0",
+   "set": "decoder",
+   "dataset": "synthctx_h55_sepick",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthctx_h55_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_synth__synthctx_h55_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "synthctx_h55_sepick_cv80"
+  },
+  {
+   "id": "decoder/synthctx_h55_sepick/s1",
+   "set": "decoder",
+   "dataset": "synthctx_h55_sepick",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthctx_h55_sepick__s1"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthctx_h55_sepick/s2",
+   "set": "decoder",
+   "dataset": "synthctx_h55_sepick",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthctx_h55_sepick__s2"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthxor_h45_sepick/s0",
+   "set": "decoder",
+   "dataset": "synthxor_h45_sepick",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthxor_h45_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_synth__synthxor_h45_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "synthxor_h45_sepick_cv80"
+  },
+  {
+   "id": "decoder/synthxor_h45_sepick/s1",
+   "set": "decoder",
+   "dataset": "synthxor_h45_sepick",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthxor_h45_sepick__s1"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthxor_h45_sepick/s2",
+   "set": "decoder",
+   "dataset": "synthxor_h45_sepick",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthxor_h45_sepick__s2"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthxor_h55_sepick/s0",
+   "set": "decoder",
+   "dataset": "synthxor_h55_sepick",
+   "seed": 0,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthxor_h55_sepick__s0",
+     "cv_run": "results/breakthrough_v1/e17_edge_cv/runs/baseline_synth__synthxor_h55_sepick_cv80__s0"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ],
+   "cv_dataset": "synthxor_h55_sepick_cv80"
+  },
+  {
+   "id": "decoder/synthxor_h55_sepick/s1",
+   "set": "decoder",
+   "dataset": "synthxor_h55_sepick",
+   "seed": 1,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthxor_h55_sepick__s1"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  },
+  {
+   "id": "decoder/synthxor_h55_sepick/s2",
+   "set": "decoder",
+   "dataset": "synthxor_h55_sepick",
+   "seed": 2,
+   "candidates": [
+    {
+     "name": "dse",
+     "family": "dse",
+     "kind": "model",
+     "run": "results/breakthrough_v1/e14_search_then_train/runs/baseline_synth__synthxor_h55_sepick__s2"
+    },
+    {
+     "name": "spectral@kdse",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kdse"
+    },
+    {
+     "name": "sgc@kdse",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kdse"
+    },
+    {
+     "name": "spectral@kcls",
+     "family": "spectral",
+     "kind": "spectral",
+     "k": "kcls"
+    },
+    {
+     "name": "sgc@kcls",
+     "family": "sgc",
+     "kind": "sgc",
+     "k": "kcls"
+    }
+   ]
+  }
+ ]
+}

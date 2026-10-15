@@ -14,6 +14,8 @@ The [environment declaration](../UV_ENVIRONMENTS.txt), [dataset guide](../data/R
 | `run_se_guided_baseline.py` | Label-free search over explicit edge weightings (edge channels, multiplex layers, endpoint context, products), scored by two-level SE; `--spectral reg`, `--order2`, `--beam B --max_order R` |
 | `write_se_reweighted_dataset.py` | Write a search pick as `<name>_edge_weight.npy` next to a copy of the dataset, for training the edge-free DSE on it |
 | `se_select_decoder.py` | For runs on a reweighted graph, compare the DSE assignment with spectral / SGC partitions by two-level SE (`--spectral reg`) |
+| `make_edge_cv_split.py` | Hold out a fraction of undirected edges (no new isolated nodes); writes `<name>_cv80/` and its held-out pairs |
+| `select_partition_rules.py` | Score label-free selection rules (SE, medoid, edge-CV SE, two-view SE, feature-gated edge-CV) on a JSON list of decisions |
 | `report_e2_mechanism.py` | Synthetic edge-information controls and effect tables |
 | `report_e3_real.py` | Merge real runs, choose starts using baseline SE, write tables; supports `--out_dir` |
 | `build_results_index.py` | Utility for indexing local result files |

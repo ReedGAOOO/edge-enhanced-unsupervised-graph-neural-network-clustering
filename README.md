@@ -15,9 +15,11 @@ The active branch is `breakthrough-2026-10`. Plans E1–E16 are recorded. The cu
   (`tools/run_se_guided_baseline.py --spectral reg`) uses no labels. It finds the useful weighting where one exists
   (ACM `layer+PAP`, the DBLP venue channel, the synthetic contexts including XOR at second order), and training DSE on
   the searched ACM graph lifts it from 0.464 to 0.538 (E14/E16).
-- **Label-free choice between clusterers is not solved.** Choosing DSE, spectral or SGC by structural entropy rescues
-  AIFB (0.08 → 0.44) and the synthetic graphs but selects a worse regularized-spectral partition on Photo
-  (0.629 → 0.453). DSE decoding and SE-selected decoding are reported separately.
+- **Label-free choice between methods: edge cross-validation helps, misalignment remains.** Choosing by plain structural
+  entropy picks a worse partition in 5 of 14 seed-0 decisions (Photo DSE 0.629 → spectral 0.453). Scoring candidates
+  on 20% held-out edges after recomputing them on the rest (E17–E18) cuts the mean regret from 0.050 to 0.022, with one
+  miss left (Photo again: real but label-misaligned graph structure). A feature-gated variant designed after seeing E18
+  has regret 0.004 there and still needs validation on new instances.
 - **Plain spectral clustering is unstable on graphs with more components than clusters** (Cora 78, Photo 136): NMI over
   five eigensolver starts spans 0.03–0.18 on Cora and 0.005–0.51 on Photo. `spectral_reg` removes this (E15).
 - **B45's message gate is fixed.** `--no-edge_msg_gate_renorm` removes the Photo collapse (0.004 → 0.634) and keeps
@@ -362,6 +364,42 @@ for the beam to extend. Rows: [spectral_stability.csv](configs/breakthrough/evid
 [se_search_reg_beam.csv](configs/breakthrough/evidence/se_search_reg_beam.csv),
 [search_then_train.csv](configs/breakthrough/evidence/search_then_train.csv).
 
+### E17–E18: choosing between methods without labels
+
+E14/E16 exposed the selection problem: structural entropy prefers the most compressible partition, whichever method
+produced it, and spectral clustering optimizes nearly the same criterion. `tools/select_partition_rules.py` compares
+rules on 42 decisions: model choice on the five real graphs (baseline, B31, B31+ctx, B45 safe gate + ctx, regularized
+spectral, SGC; three seeds) and decoder choice on the nine E14/E16 searched graphs (DSE vs regularized spectral / SGC at
+the DSE and class cluster counts; three seeds). The instances are listed in
+[selection_rules_spec.json](configs/breakthrough/selection_rules_spec.json). Rules R0–R3 were fixed before evaluation:
+
+- R0 `se`: lowest structural entropy on the input graph (E14/E16's rule);
+- R1 `medoid`: one candidate per method, highest mean AMI to the others;
+- R2 `edge_cv`: hold out 20% of undirected edges (`tools/make_edge_cv_split.py`), recompute every candidate on the
+  rest (models retrained: `e17_edge_cv.json`, 29 runs, seed 0), pick the lowest structural entropy on the held-out edges;
+- R3 `two_view`: rank sum of structural entropy on the input graph and on a 10-NN feature graph.
+
+Seed-0 decisions (14, the subset with edge-CV runs); regret = best candidate's NMI minus the pick's:
+
+| rule | mean NMI | mean regret | max regret | regret > 0.05 |
+|---|---|---|---|---|
+| R0 se | 0.598 | 0.050 | 0.225 | 5 |
+| R1 medoid | 0.587 | 0.060 | 0.404 | 2 |
+| R2 edge_cv | 0.625 | 0.022 | 0.176 | 1 |
+| R3 two_view | 0.596 | 0.052 | 0.322 | 4 |
+| R4 gated_cv (defined after E18) | 0.644 | 0.004 | 0.029 | 0 |
+| best candidate | 0.647 | | | |
+
+Over all 42 decisions R0, R1 and R3 have mean regret 0.048, 0.057 and 0.044 with 15, 6 and 11 misses. Edge
+cross-validation fixes Cora and ACM model choice, the DBLP decoder and both XOR decoders (0.477 → 0.702, 0.811 → 0.880).
+Its one miss, the Photo decoder, is not overfitting: regularized spectral's partition also compresses held-out edges
+better, so it reflects real graph structure that the labels do not follow. The feature view picks DSE there but fails on
+AIFB, whose features compress held-out edges worse than a random partition (gate r = −0.44 / −0.59; 0.11–0.78 on the
+other datasets). R4 combines the two: rank by held-out and feature-graph structural entropy when a feature-only
+partition beats random on held-out edges (r > 0), otherwise use R2. It was designed with these 14 decisions in view,
+so its score is a hypothesis, not evidence. Rows: [selection_rules_summary.csv](configs/breakthrough/evidence/selection_rules_summary.csv),
+[selection_rules_instances.csv](configs/breakthrough/evidence/selection_rules_instances.csv).
+
 ### Retired in this pass
 
 | Item | Why |
@@ -382,8 +420,9 @@ for the beam to extend. Rows: [spectral_stability.csv](configs/breakthrough/evid
 ### Open problems, in priority order
 
 1. **Label-free choice between partition generators and models.** Structural entropy prefers the most compressible
-   partition, whichever method produced it: it rescued AIFB and failed on Photo (E16), and it chose the wrong model on
-   DBLP earlier. The baseline-guided start rule is the only selection rule that has held up.
+   partition, whichever method produced it. Edge cross-validation (E18) removes the self-evaluation advantage but not
+   label misalignment (Photo). The feature-gated rule R4 must be validated on new datasets, split seeds and training
+   seeds before it is used; until then report R2 and the per-method results.
 2. **Higher-order contexts.** Exhaustive enumeration works but grows combinatorially (349 → 4,837 candidates at order 2
    with 34 context dims); gradients and beams need lower-order signal. A prior on which node attributes can carry context
    (categorical node types or roles) is the practical lever to test.
@@ -462,6 +501,12 @@ done
   --seeds 0,1,2 --spectral reg --beam 8 --max_order 2 --workers 16 --out_dir results/breakthrough_v1/e15_search_robustness/real_reg_beam
 .venv/bin/python tools/check_spectral_stability.py --root_path "$DATA" --datasets Cora,Photo,dblp_magnn_author_v2,entities_aifb,acm_multiplex_v2 \
   --out_csv results/breakthrough_v1/e15_search_robustness/spectral_stability.csv
+# E17/E18: edge-CV splits, retraining on the training graphs, selection-rule benchmark (the E14/E16 picks must exist)
+.venv/bin/python tools/make_edge_cv_split.py --root_path "$DATA" --frac 0.2 --seed 0 --suffix _cv80 \
+  --datasets cora,photo,dblp_magnn_author_v2,entities_aifb,acm_multiplex_v2,cora_sepick_reg,photo_sepick,dblp_sepick,aifb_sepick_reg,acm_sepick,synthctx_h45_sepick,synthctx_h55_sepick,synthxor_h45_sepick,synthxor_h55_sepick
+.venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e17_edge_cv.json --root_path "$DATA" --max_parallel 5
+.venv/bin/python tools/select_partition_rules.py --root_path "$DATA" --spec configs/breakthrough/selection_rules_spec.json \
+  --out_dir results/breakthrough_v1/e18_selection_rules
 # E14/E16: write each pick (table in configs/breakthrough/README.md), train, choose decoders
 .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e16_search_then_train_reg.json --root_path "$DATA" --max_parallel 5
 .venv/bin/python tools/se_select_decoder.py --spectral reg --run_dirs results/breakthrough_v1/e16_search_then_train_reg/runs/*/ \

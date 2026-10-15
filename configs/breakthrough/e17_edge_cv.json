@@ -1,0 +1,371 @@
+{
+  "name": "e17_edge_cv",
+  "description": "Edge cross-validation runs for the selection-rule benchmark: each seed-0 model of configs/breakthrough/selection_rules_spec.json retrained, with its selected start, on a training graph that holds out 20% of undirected edges (tools/make_edge_cv_split.py, seed 0).",
+  "seeds": [
+    0
+  ],
+  "max_nums_default": 6,
+  "max_nums": {
+    "cora_cv80": 10,
+    "photo_cv80": 10,
+    "dblp_magnn_author_v2_cv80": 12,
+    "entities_aifb_cv80": 16,
+    "acm_multiplex_v2_cv80": 6,
+    "cora_sepick_reg_cv80": 10,
+    "photo_sepick_cv80": 10,
+    "dblp_sepick_cv80": 12,
+    "aifb_sepick_reg_cv80": 16,
+    "acm_sepick_cv80": 6,
+    "synthctx_h45_sepick_cv80": 6,
+    "synthctx_h55_sepick_cv80": 6,
+    "synthxor_h45_sepick_cv80": 6,
+    "synthxor_h55_sepick_cv80": 6
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "b31_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "cora_cv80"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "acm_multiplex_v2_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "dblp_magnn_author_v2_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "entities_aifb_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31ctx_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "cora_cv80"
+      ],
+      "overrides": {
+        "edge_ctx_dim": 32,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b31ctx_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "acm_multiplex_v2_cv80"
+      ],
+      "overrides": {
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31ctx_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "dblp_magnn_author_v2_cv80"
+      ],
+      "overrides": {
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31ctx_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "entities_aifb_cv80"
+      ],
+      "overrides": {
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b31ctx_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo_cv80"
+      ],
+      "overrides": {
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b45nrctx_nowarm",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "cora_cv80"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "edge_ctx_dim": 32,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "b45nrctx_warm",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "acm_multiplex_v2_cv80"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b45nrctx_warm",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "dblp_magnn_author_v2_cv80"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b45nrctx_warm",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "entities_aifb_cv80"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "b45nrctx_warm",
+      "preset": "b45_v31_msgcond_gs050",
+      "datasets": [
+        "photo_cv80"
+      ],
+      "overrides": {
+        "edge_msg_gate_renorm": false,
+        "edge_ctx_dim": 32,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora_cv80"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "baseline_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora_sepick_reg_cv80"
+      ],
+      "overrides": {
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "baseline_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synthctx_h45_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    },
+    {
+      "tag": "baseline_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synthctx_h55_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    },
+    {
+      "tag": "baseline_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synthxor_h45_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    },
+    {
+      "tag": "baseline_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synthxor_h55_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "acm_multiplex_v2_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "acm_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "aifb_sepick_reg_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "dblp_magnn_author_v2_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "dblp_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "entities_aifb_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "photo_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "baseline_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "photo_sepick_cv80"
+      ],
+      "overrides": {
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    }
+  ]
+}

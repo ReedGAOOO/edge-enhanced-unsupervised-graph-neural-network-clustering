@@ -20,6 +20,8 @@ tracked tables. Full training outputs and checkpoints are excluded from Git.
 | `e13_xor_context.json` | Can learned edge heads read second-order (XOR-role) contexts? | 42/42 recorded |
 | `e14_search_then_train.json` | Edge-free DSE trained on the plain-spectral search picks | 42/42 recorded on the RTX 4090 server |
 | `e16_search_then_train_reg.json` | The same with the regularized-spectral picks (Cora, AIFB retrained) | 12/12 recorded on the RTX 4090 server |
+| `e17_edge_cv.json` | Seed-0 models of the selection benchmark retrained on graphs with 20% of edges held out | 29/29 recorded on the RTX 4090 server |
+| `selection_rules_spec.json` | Not a training plan: the 42 decisions scored by `tools/select_partition_rules.py` (E18) | Evaluated; results in the root README |
 
 E5 headroom, E10 SE alignment, the B45 gate diagnosis, the E12 search, and E15 (spectral stability, regularized and beam
 search) are standalone tool runs, not missing numbered plan files. Their commands are documented in
