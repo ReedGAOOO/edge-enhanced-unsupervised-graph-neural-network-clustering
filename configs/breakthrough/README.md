@@ -24,6 +24,8 @@ tracked tables. Full training outputs and checkpoints are excluded from Git.
 | `selection_rules_spec.json` | Not a training plan: the 42 decisions scored by `tools/select_partition_rules.py` (E18) | Evaluated; results in the root README |
 | `e19a_selection_validation.json`, `e19b_selection_validation.json` | Written by `tools/run_selection_validation.py`: stage 1 (baseline starts, synthetic seed-1 runs) and stage 2 (other models, edge-CV runs) for ten new decisions | 20/20 and 24/24 recorded on the RTX 4090 server |
 | `selection_validation_spec.json` | The ten E19 decisions | Evaluated with the rules frozen at `876486b` |
+| `e21_few_label_dse.json` | Few-label DSE: B31 + context with supervised pair and edge-head losses vs the edge-free baseline with the pair loss | 88/88 recorded on the RTX 4090 server (five reruns at 2 parallel jobs after OOM) |
+| `e21_few_label_edges_jobs.csv` | Not a plan: dataset / search-candidate list for `tools/few_label_edge_semantics.py` (E21 methods 0-2) | Evaluated |
 
 E5 headroom, E10 SE alignment, the B45 gate diagnosis, the E12 search, and E15 (spectral stability, regularized and beam
 search) are standalone tool runs, not missing numbered plan files. Their commands are documented in

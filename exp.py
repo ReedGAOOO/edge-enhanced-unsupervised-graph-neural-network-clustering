@@ -199,6 +199,9 @@ class Exp:
             if isinstance(module, LorentzAgg):
                 module.gate_renorm = bool(getattr(self.configs, "edge_msg_gate_renorm", True))
                 module.keep_isolated = bool(getattr(self.configs, "keep_isolated_nodes", False))
+        if int(getattr(self.configs, "label_budget", 0)) > 0:
+            model.sup_pair_lambda = float(getattr(self.configs, "sup_pair_lambda", 1.0))
+            model.sup_edge_lambda = float(getattr(self.configs, "sup_edge_lambda", 1.0))
         return model
 
     def train(self):
@@ -306,6 +309,10 @@ class Exp:
             "edge_msg_confidence_temp": float(getattr(self.configs, "edge_msg_confidence_temp", 1.0)),
             "edge_msg_gate_renorm": bool(getattr(self.configs, "edge_msg_gate_renorm", True)),
             "keep_isolated_nodes": bool(getattr(self.configs, "keep_isolated_nodes", False)),
+            "label_budget": int(getattr(self.configs, "label_budget", 0)),
+            "label_seed": int(getattr(self.configs, "label_seed", 0)),
+            "sup_pair_lambda": float(getattr(self.configs, "sup_pair_lambda", 1.0)),
+            "sup_edge_lambda": float(getattr(self.configs, "sup_edge_lambda", 1.0)),
             "edge_attr_pool_confidence": bool(getattr(self.configs, "edge_attr_pool_confidence", False)),
             "edge_attr_pool_conf_power": float(getattr(self.configs, "edge_attr_pool_conf_power", 1.0)),
             "edge_weight_learn_reg_lambda": float(getattr(self.configs, "edge_weight_learn_reg_lambda", 0.02)),

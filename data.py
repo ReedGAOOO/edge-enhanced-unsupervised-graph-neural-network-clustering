@@ -47,6 +47,13 @@ def build_endpoint_context_attr(x: torch.Tensor, edge_index: torch.Tensor, max_d
     return z[src] * z[dst]
 
 
+def choose_labeled_nodes(y: torch.Tensor, budget: int, seed: int) -> torch.Tensor:
+    """Indices of `budget` nodes drawn uniformly (seeded) from the nodes with a known label (few-label setting)."""
+    known = torch.nonzero(y >= 0).view(-1)
+    g = torch.Generator().manual_seed(int(seed))
+    return known[torch.randperm(known.numel(), generator=g)[:min(int(budget), known.numel())]]
+
+
 def standardize_edge_attr(edge_attr: torch.Tensor) -> torch.Tensor:
     if edge_attr is None or edge_attr.numel() == 0:
         return edge_attr
@@ -286,6 +293,14 @@ def load_data(configs):
     valid_y = data.y[data.y >= 0]
     data.num_classes = int(valid_y.max().item() + 1) if valid_y.numel() > 0 else 1
     data.known_label_ratio = float((data.y >= 0).float().mean().item()) if data.y.numel() > 0 else 0.0
+    budget = int(getattr(configs, "label_budget", 0))
+    if budget > 0:
+        # Few-label setting: these nodes supervise training and are excluded from evaluation (their y becomes -1).
+        data.sup_idx = choose_labeled_nodes(data.y, budget, int(getattr(configs, "label_seed", 0)))
+        data.sup_y = data.y[data.sup_idx].clone()
+        y = data.y.clone()
+        y[data.sup_idx] = -1
+        data.y = y
     return data
 
 

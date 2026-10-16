@@ -18,6 +18,8 @@ new README findings inspectable on GitHub. They are not full logs, checkpoints o
 | `selection_validation_instances.csv` | E19 per-decision picks and NMI for every rule, the best candidate and the feature-gate statistic |
 | `few_label_selection_summary.csv` | E20 per budget and group; `se_*` / `edge_cv_*` columns cover only the decisions those rules were scored on |
 | `few_label_selection_instances.csv` | E20 per decision and budget: mean and tail regret over 200 label draws, in NMI and ARI |
+| `few_label_edge_methods.csv` | E21 methods 0-2 per dataset, budget and label draw (NMI on unlabeled nodes, labeled-edge counts, fallbacks) |
+| `few_label_dse_runs.csv` | E21 method 3 runs (`basesup`, `b31ctxsup`; tag encodes budget and label draw) |
 | `search_then_train.csv` | E14 (plain) and E16 (regularized) decoder choice per run, with each run's tag and training loss for the start rule |
 | `machine_check.csv` | Matching seed-0 `b31fr_warm` rows from E9 and E9x ledgers; two datasets, no pooling with the main benchmark |
 | `se_alignment.csv` | Direct copy of `e10_se_alignment/se_alignment.csv`; finite candidate-weighting screen using labels for diagnosis |

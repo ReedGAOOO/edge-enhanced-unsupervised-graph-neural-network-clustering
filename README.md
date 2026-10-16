@@ -25,6 +25,11 @@ The active branch is `breakthrough-2026-10`. Plans E1–E16 are recorded. The cu
   best label-free rule, and 50 labels beat it clearly (E20: NMI regret 0.029 / 0.015 against 0.026 for edge CV and
   0.043 for SE on the same 24 decisions); 50 labels fix the Photo decoder completely. The defensible pipeline is
   unsupervised candidate generation (SE-guided search, DSE, classic clusterers) followed by few-label selection.
+- **With a few labels, edge semantics still matter where features are weak; the learned heads still do not.** In E21 the
+  best few-label method is "SE proposes, labels pick" (top-10 SE weightings, labels choose): best or near best on all
+  synthetic graphs (XOR included, 0.70 / 0.88), AIFB, DBLP and Cora at small budgets. Semi-supervised node
+  classification wins where node features are strong (Photo 0.81, ACM 0.67 at 200 labels). Supervising B31's edge heads
+  and cluster assignments does not teach it XOR contexts (0.19 / 0.62) and helps only ACM (0.652 vs 0.592 without edges).
 - **Plain spectral clustering is unstable on graphs with more components than clusters** (Cora 78, Photo 136): NMI over
   five eigensolver starts spans 0.03–0.18 on Cora and 0.005–0.51 on Photo. `spectral_reg` removes this (E15).
 - **B45's message gate is fixed.** `--no-edge_msg_gate_renorm` removes the Photo collapse (0.004 → 0.634) and keeps
@@ -460,6 +465,44 @@ for real annotation; regret is scored on all labeled nodes including the m drawn
 [few_label_selection_summary.csv](configs/breakthrough/evidence/few_label_selection_summary.csv),
 [few_label_selection_instances.csv](configs/breakthrough/evidence/few_label_selection_instances.csv).
 
+### E21: few-label edge semantics
+
+Three ways to use m labeled nodes (drawn by `data.choose_labeled_nodes`, excluded from evaluation) are compared with
+semi-supervised node classification (logistic regression on SGC features, `node_clf`):
+1. `se_top_label`: the ten lowest-SE weightings of the E15 search (plus uniform), each clustered by regularized spectral
+   clustering and SGC+KMeans; the labels pick one by ARI (`tools/few_label_edge_semantics.py`);
+2. `edge_clf`: a same-label classifier on edges between labeled nodes (edge attributes + endpoint context; logistic
+   regression, MLP, and an MLP with pseudo-labeled edges from `node_clf`) reweights the graph before clustering;
+3. few-label DSE (`e21_few_label_dse.json`, `--label_budget m --label_seed r`): B31 + context with a balanced pairwise
+   same-cluster loss on labeled nodes and a same-label loss on its edge-weight heads (`b31ctxsup`), against the edge-free
+   baseline with the pairwise loss only (`basesup`). Both losses use weight 1.0, untuned.
+
+NMI on unlabeled nodes, mean of label draws 0–1, m = 20 / 200 (AIFB: m = 20; it has 176 labeled nodes):
+
+| dataset | node_clf | se_top_label | edge_clf (pseudo) | basesup | b31ctxsup |
+|---|---|---|---|---|---|
+| synth direct h45 | 0.15 / 0.44 | **0.72 / 0.72** | 0.47 / 0.65 | 0.07 / 0.10 | 0.39 / 0.46 |
+| synth direct h55 | 0.33 / 0.70 | 0.83 / **0.91** | 0.60 / 0.88 | 0.49 / 0.52 | **0.87** / 0.85 |
+| synth contextual h45 | 0.15 / 0.44 | **0.60 / 0.72** | 0.47 / 0.54 | 0.02 / 0.10 | 0.37 / 0.42 |
+| synth contextual h55 | 0.33 / 0.70 | 0.83 / **0.91** | 0.60 / 0.89 | 0.49 / 0.55 | **0.86** / 0.83 |
+| synth XOR h45 | 0.13 / 0.43 | **0.70 / 0.70** | 0.45 / 0.49 | 0.01 / 0.09 | 0.17 / 0.19 |
+| synth XOR h55 | 0.37 / 0.67 | **0.81 / 0.88** | 0.58 / 0.72 | 0.45 / 0.50 | 0.61 / 0.62 |
+| Cora | 0.20 / 0.57 | **0.57 / 0.58** | 0.32 / 0.37 | 0.36 / 0.43 | 0.42 / 0.45 |
+| Photo | 0.53 / **0.81** | 0.44 / 0.52 | 0.44 / 0.56 | **0.67** / 0.65 | 0.66 / 0.65 |
+| DBLP | 0.64 / 0.73 | **0.78** / 0.74 | 0.76 / **0.78** | 0.76 / 0.77 | 0.77 / **0.78** |
+| AIFB (m = 20) | 0.09 | **0.53** | 0.31 | 0.01 | 0.05 |
+| ACM | **0.57 / 0.67** | 0.57 / 0.57 | 0.55 / 0.65 | 0.53 / 0.59 | 0.46 / 0.65 |
+
+Edges between labeled nodes are scarce (0–13 at m ≤ 50; about 250 at m = 200 on the synthetic graphs, 886 on ACM), so
+learned edge semantics (edge classifiers, supervised edge heads) only start to work around 200 labels and only for
+first-order readings; neither learns the XOR context. `se_top_label` reaches it because exhaustive second-order
+enumeration put the right weighting among the SE top ten. Semi-supervised classification is the stronger choice when
+node features are informative and labels are not scarce (Photo, ACM at ≥ 100 labels); structure- and edge-based few-label
+clustering is stronger when features are weak or labels very few. The pairwise loss sometimes hurts DSE (AIFB, synthetic
+h55 against the unsupervised baseline), and method 3 has two label draws only. Rows:
+[few_label_edge_methods.csv](configs/breakthrough/evidence/few_label_edge_methods.csv),
+[few_label_dse_runs.csv](configs/breakthrough/evidence/few_label_dse_runs.csv).
+
 ### Retired in this pass
 
 | Item | Why |
@@ -569,6 +612,12 @@ done
 .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e17_edge_cv.json --root_path "$DATA" --max_parallel 5
 .venv/bin/python tools/select_partition_rules.py --root_path "$DATA" --spec configs/breakthrough/selection_rules_spec.json \
   --out_dir results/breakthrough_v1/e18_selection_rules
+# E21: few-label edge semantics (methods 0-2 on CPU; method 3 trains few-label DSE runs)
+.venv/bin/python tools/run_se_guided_baseline.py --datasets synth_ctx_v1_h45_direct_ds00,synth_ctx_v1_h55_direct_ds00 --seeds 0 \
+  --spectral reg --workers 12 --out_dir results/breakthrough_v1/e21_few_label_edges/search_direct
+.venv/bin/python tools/few_label_edge_semantics.py --jobs configs/breakthrough/e21_few_label_edges_jobs.csv \
+  --budgets 10,20,50,100,200 --draws 0,1,2 --workers 6 --out_csv results/breakthrough_v1/e21_few_label_edges/methods012.csv
+.venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e21_few_label_dse.json --root_path "$DATA" --max_parallel 3
 # E20: few-label selection over the E18/E19 decisions (reuses their checkpoints; caches partitions)
 .venv/bin/python tools/few_label_selection.py --specs configs/breakthrough/selection_rules_spec.json configs/breakthrough/selection_validation_spec.json \
   --reference results/breakthrough_v1/e18_selection_rules/instances.csv results/breakthrough_v1/e19_selection_validation/rules/instances.csv \

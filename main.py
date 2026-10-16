@@ -133,6 +133,14 @@ parser.add_argument('--edge_msg_confidence_temp', type=float, default=1.0,
 parser.add_argument('--edge_msg_gate_renorm', action=argparse.BooleanOptionalAction, default=True,
                     help='Re-normalize the gated message adjacency by degree (--no-edge_msg_gate_renorm keeps gate '
                          'factors on the normalized adjacency).')
+parser.add_argument('--label_budget', type=int, default=0,
+                    help='Few-label setting: number of labeled nodes (seeded by --label_seed) that supervise training; '
+                         'they are excluded from evaluation. 0 = unsupervised.')
+parser.add_argument('--label_seed', type=int, default=0, help='Seed for choosing the labeled nodes.')
+parser.add_argument('--sup_pair_lambda', type=float, default=1.0,
+                    help='Weight of the pairwise same-cluster loss on labeled node pairs (with --label_budget).')
+parser.add_argument('--sup_edge_lambda', type=float, default=1.0,
+                    help='Weight of the same-label loss on learned edge-weight heads for edges between labeled nodes.')
 parser.add_argument('--keep_isolated_nodes', action='store_true',
                     help='Lorentz aggregation returns the input for nodes without neighbours instead of a zero vector.')
 parser.add_argument('--edge_attr_pool_confidence', action='store_true',

@@ -126,6 +126,9 @@ class DSI(nn.Module):
             )
         else:
             self.edge_weight_mapper = None
+        # Few-label supervision weights; zero (unsupervised) unless Exp.build_model sets them for --label_budget > 0.
+        self.sup_pair_lambda = 0.0
+        self.sup_edge_lambda = 0.0
 
         if self._use_edge_state_variant():
             hidden = max(8, int(edge_attr_hidden_dim))
@@ -536,7 +539,42 @@ class DSI(nn.Module):
             edge_reg = self.edge_weight_learn_reg_lambda * edge_reg_raw
             self.last_edge_reg = float(edge_reg.detach().item())
             loss = loss + edge_reg
+        if getattr(data, "sup_idx", None) is not None and (self.sup_pair_lambda > 0.0 or self.sup_edge_lambda > 0.0):
+            loss = loss + self._supervised_loss(data, ass_aug_dict[self.height])
         return loss
+
+    def _supervised_loss(self, data, ass, eps=1e-6):
+        """Few-label losses: labeled node pairs should share a cluster iff they share a label (must-link and cannot-link
+        pairs weighted equally), and the learned edge-weight heads should score edges between same-label nodes high."""
+        idx, ys = data.sup_idx, data.sup_y
+        if ass.is_sparse:
+            ass = ass.to_dense()
+        total = ass.new_tensor(0.0)
+        if self.sup_pair_lambda > 0.0 and idx.numel() > 1:
+            p = ass[idx]
+            sim = (p @ p.t()).clamp(eps, 1.0 - eps)
+            iu = torch.triu_indices(idx.numel(), idx.numel(), 1, device=p.device)
+            s = sim[iu[0], iu[1]]
+            t = (ys[:, None] == ys[None, :]).float()[iu[0], iu[1]]
+            pos = t.mean().clamp(eps, 1.0 - eps)
+            w = torch.where(t > 0, 0.5 / pos, 0.5 / (1.0 - pos))
+            total = total + self.sup_pair_lambda * torch.nn.functional.binary_cross_entropy(s, t, weight=w)
+        edge_attr = getattr(data, "edge_attr", None)
+        if self.sup_edge_lambda > 0.0 and self.edge_weight_mapper is not None and edge_attr is not None:
+            lab = torch.full((ass.shape[0],), -1, dtype=ys.dtype, device=ys.device)
+            lab[idx] = ys
+            src, dst = data.edge_index
+            mask = (lab[src] >= 0) & (lab[dst] >= 0)
+            if int(mask.sum()) >= 2:
+                logits = self.edge_weight_mapper(edge_attr[mask].float())
+                target = (lab[src[mask]] == lab[dst[mask]]).float()
+                pos = target.mean().clamp(eps, 1.0 - eps)
+                w = torch.where(target > 0, 0.5 / pos, 0.5 / (1.0 - pos))
+                for head in ("msg", "si"):
+                    col = min(self._edge_head_index(head), logits.shape[1] - 1)
+                    total = total + self.sup_edge_lambda * 0.5 * torch.nn.functional.binary_cross_entropy_with_logits(
+                        logits[:, col], target, weight=w)
+        return total
 
     def warm_start_loss(self, data, pseudo: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
         """Cross-entropy between the leaf-level assignment and a fixed pseudo partition."""

@@ -1,0 +1,717 @@
+{
+  "name": "e21_few_label_dse",
+  "description": "E21 method 3: few-label DSE. B31 + endpoint context with a pairwise same-cluster loss on the labeled nodes and a same-label loss on its edge-weight heads (b31ctxsup), against the edge-free baseline with the pairwise loss only (basesup). Labeled nodes are drawn by --label_seed and excluded from evaluation.",
+  "seeds": [
+    0
+  ],
+  "max_nums_default": 6,
+  "max_nums": {
+    "cora": 10,
+    "photo": 10,
+    "dblp_magnn_author_v2": 12,
+    "entities_aifb": 16,
+    "acm_multiplex_v2": 6
+  },
+  "defaults": {
+    "epochs": 1000,
+    "hid_dim": 512,
+    "w_decay": 0.0,
+    "temperature": 1.0,
+    "dropout": 0.1,
+    "eval_freq": 100,
+    "train_log_interval": 200,
+    "n_cluster_trials": 3,
+    "patience": 0,
+    "exp_iters": 1
+  },
+  "jobs": [
+    {
+      "tag": "b31ctxsup-m20-r0_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "cora"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "none",
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r0_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "cora"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "none",
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r0_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r0_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r0_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r0_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r0_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "entities_aifb"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m150-r0_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "entities_aifb"
+      ],
+      "overrides": {
+        "label_budget": 150,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r0_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r0_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r0_synth",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500,
+        "edge_ctx_dim": 64
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r0_synth",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500,
+        "edge_ctx_dim": 64
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r1_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "cora"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "none",
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r1_nowarm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "cora"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "none",
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r1_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r1_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "photo"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r1_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r1_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r1_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "entities_aifb"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m150-r1_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "entities_aifb"
+      ],
+      "overrides": {
+        "label_budget": 150,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r1_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r1_warm",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "edge_ctx_dim": 32
+      }
+    },
+    {
+      "tag": "b31ctxsup-m20-r1_synth",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500,
+        "edge_ctx_dim": 64
+      }
+    },
+    {
+      "tag": "b31ctxsup-m200-r1_synth",
+      "preset": "b31_dualscalar_assign",
+      "datasets": [
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500,
+        "edge_ctx_dim": 64
+      }
+    },
+    {
+      "tag": "basesup-m20-r0_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "basesup-m200-r0_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "basesup-m20-r0_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "photo"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m200-r0_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "photo"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m20-r0_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m200-r0_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m20-r0_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "entities_aifb"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m150-r0_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "entities_aifb"
+      ],
+      "overrides": {
+        "label_budget": 150,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m20-r0_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m200-r0_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m20-r0_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    },
+    {
+      "tag": "basesup-m200-r0_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 0,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    },
+    {
+      "tag": "basesup-m20-r1_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "basesup-m200-r1_nowarm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "cora"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "none"
+      }
+    },
+    {
+      "tag": "basesup-m20-r1_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "photo"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m200-r1_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "photo"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m20-r1_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m200-r1_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "dblp_magnn_author_v2"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m20-r1_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "entities_aifb"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m150-r1_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "entities_aifb"
+      ],
+      "overrides": {
+        "label_budget": 150,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m20-r1_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m200-r1_warm",
+      "preset": "baseline_v1",
+      "datasets": [
+        "acm_multiplex_v2"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200
+      }
+    },
+    {
+      "tag": "basesup-m20-r1_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00"
+      ],
+      "overrides": {
+        "label_budget": 20,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    },
+    {
+      "tag": "basesup-m200-r1_synth",
+      "preset": "baseline_v1",
+      "datasets": [
+        "synth_ctx_v1_h45_direct_ds00",
+        "synth_ctx_v1_h55_direct_ds00",
+        "synth_ctx_v1_h45_contextual_ds00",
+        "synth_ctx_v1_h55_contextual_ds00",
+        "synth_ctxxor_v1_h45_contextual_ds00",
+        "synth_ctxxor_v1_h55_contextual_ds00"
+      ],
+      "overrides": {
+        "label_budget": 200,
+        "label_seed": 1,
+        "warm_start": "auto",
+        "warm_start_epochs": 200,
+        "epochs": 1500
+      }
+    }
+  ]
+}
