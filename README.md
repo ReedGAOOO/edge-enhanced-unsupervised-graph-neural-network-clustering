@@ -30,6 +30,10 @@ The active branch is `breakthrough-2026-10`. Plans E1–E16 are recorded. The cu
   synthetic graphs (XOR included, 0.70 / 0.88), AIFB, DBLP and Cora at small budgets. Semi-supervised node
   classification wins where node features are strong (Photo 0.81, ACM 0.67 at 200 labels). Supervising B31's edge heads
   and cluster assignments does not teach it XOR contexts (0.19 / 0.62) and helps only ACM (0.652 vs 0.592 without edges).
+- **The labels can also choose the route.** Five-fold cross-validation inside the labeled set picks between the
+  structure route ("SE proposes, labels pick") and the feature route (node classification); from 50 labels the choice is
+  within 0.004 of the better route per draw and beats either route alone (E22: NMI 0.696 / 0.730 / 0.761 at 50 / 100 /
+  200 labels over 11 graphs).
 - **Plain spectral clustering is unstable on graphs with more components than clusters** (Cora 78, Photo 136): NMI over
   five eigensolver starts spans 0.03–0.18 on Cora and 0.005–0.51 on Photo. `spectral_reg` removes this (E15).
 - **B45's message gate is fixed.** `--no-edge_msg_gate_renorm` removes the Photo collapse (0.004 → 0.634) and keeps
@@ -503,6 +507,28 @@ h55 against the unsupervised baseline), and method 3 has two label draws only. R
 [few_label_edge_methods.csv](configs/breakthrough/evidence/few_label_edge_methods.csv),
 [few_label_dse_runs.csv](configs/breakthrough/evidence/few_label_dse_runs.csv).
 
+### E22: letting the labels choose the route
+
+`tools/few_label_route_selection.py` uses the same labeled nodes to choose between the structure route (`se_top_label`)
+and the feature route (`node_clf`): 5-fold cross-validation inside the labeled set, the structure route mapping each
+cluster to its training-fold majority label; the more accurate route is refit on all m labels. Eleven graphs, five label
+draws per budget, NMI on unlabeled nodes:
+
+| labels | structure only | feature only | chosen route | better route per draw | regret | structure chosen |
+|---|---|---|---|---|---|---|
+| 10 | 0.648 | 0.242 | 0.634 | 0.653 | 0.019 | 85% |
+| 20 | 0.672 | 0.322 | 0.669 | 0.685 | 0.017 | 84% |
+| 50 | 0.673 | 0.502 | **0.696** | 0.700 | 0.004 | 80% |
+| 100 | 0.703 | 0.551 | **0.730** | 0.732 | 0.002 | 73% |
+| 200 | 0.724 | 0.617 | **0.761** | 0.763 | 0.002 | 66% |
+
+The choice follows the data: the structure route on every synthetic graph and on AIFB (93–100% of draws), the feature
+route on Photo from 20 labels and on ACM from 100, and a switch on Cora when node classification overtakes at 200
+labels. DBLP, where the two routes are close, is the least stable (regret about 0.02). At 10–20 labels the
+cross-validation is noisy and the structure route alone is slightly better. Rows:
+[route_selection_summary.csv](configs/breakthrough/evidence/route_selection_summary.csv),
+[route_selection_draws.csv](configs/breakthrough/evidence/route_selection_draws.csv).
+
 ### Retired in this pass
 
 | Item | Why |
@@ -612,6 +638,9 @@ done
 .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e17_edge_cv.json --root_path "$DATA" --max_parallel 5
 .venv/bin/python tools/select_partition_rules.py --root_path "$DATA" --spec configs/breakthrough/selection_rules_spec.json \
   --out_dir results/breakthrough_v1/e18_selection_rules
+# E22: route choice by cross-validation inside the labeled set (CPU)
+.venv/bin/python tools/few_label_route_selection.py --jobs configs/breakthrough/e21_few_label_edges_jobs.csv \
+  --budgets 10,20,50,100,200 --draws 0,1,2,3,4 --workers 8 --out_dir results/breakthrough_v1/e22_route_selection
 # E21: few-label edge semantics (methods 0-2 on CPU; method 3 trains few-label DSE runs)
 .venv/bin/python tools/run_se_guided_baseline.py --datasets synth_ctx_v1_h45_direct_ds00,synth_ctx_v1_h55_direct_ds00 --seeds 0 \
   --spectral reg --workers 12 --out_dir results/breakthrough_v1/e21_few_label_edges/search_direct
