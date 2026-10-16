@@ -21,6 +21,10 @@ The active branch is `breakthrough-2026-10`. Plans E1–E16 are recorded. The cu
   miss left (Photo again: real but label-misaligned graph structure). A feature-gated variant designed after seeing E18
   did not hold up on ten new decisions (E19: regret 0.025 against 0.031 for edge CV, two misses each); Amazon Computers
   repeats Photo's failure. No label-free rule resolves label misalignment; report per-method results.
+- **A few labels resolve the choice.** Selecting among the same candidates with 20 random labeled nodes matches the
+  best label-free rule, and 50 labels beat it clearly (E20: NMI regret 0.029 / 0.015 against 0.026 for edge CV and
+  0.043 for SE on the same 24 decisions); 50 labels fix the Photo decoder completely. The defensible pipeline is
+  unsupervised candidate generation (SE-guided search, DSE, classic clusterers) followed by few-label selection.
 - **Plain spectral clustering is unstable on graphs with more components than clusters** (Cora 78, Photo 136): NMI over
   five eigensolver starts spans 0.03–0.18 on Cora and 0.005–0.51 on Photo. `spectral_reg` removes this (E15).
 - **B45's message gate is fixed.** `--no-edge_msg_gate_renorm` removes the Photo collapse (0.004 → 0.634) and keeps
@@ -430,6 +434,32 @@ edge cross-validation has the lowest regret, but no rule removes label misalignm
 On a 24 GB GPU, PubMed- and Computers-sized graphs need `--max_parallel 2`: DSE's dense N×N score matrices take 8–10 GB
 per job below `knn_auto_threshold` (20,000 nodes), and four parallel jobs ran out of memory.
 
+### E20: few-label selection
+
+Because label-free selection cannot tell which real structure the labels follow, `tools/few_label_selection.py` asks how
+many labels the choice needs. For each of the 52 E18/E19 decisions it rebuilds the candidates once, then draws m labeled
+nodes uniformly (200 draws per m), picks the candidate with the highest adjusted Rand index on those nodes (ties count as
+their mean) and scores the pick on all labeled nodes. The labels are used only to select among at most six candidates.
+
+| selection | NMI regret (24 decisions with edge CV) | ARI regret (same 24) | NMI regret, all 52 | P(NMI regret > 0.05), all 52 |
+|---|---|---|---|---|
+| SE, no labels | 0.043 | 0.060 | 0.045 | |
+| edge CV, no labels | 0.026 | 0.049 | | |
+| 5 labels | 0.075 | 0.085 | 0.077 | 0.48 |
+| 10 labels | 0.052 | 0.057 | 0.052 | 0.28 |
+| 20 labels | 0.029 | 0.031 | 0.029 | 0.16 |
+| 50 labels | 0.015 | 0.012 | 0.014 | 0.08 |
+| 100 labels | 0.009 | 0.006 | 0.009 | 0.04 |
+
+Twenty labels match edge cross-validation in NMI and beat both label-free rules in ARI; fifty beat them clearly. The
+misaligned decisions resolve: Photo decoder regret falls from 0.175 (any label-free rule) to 0.031 with 20 labels and
+0.001 with 50; Computers model choice from 0.163 to 0.015 with 50 and 0.002 with 100. Residual NMI regret on the
+Computers decoder and the XOR h55 decoder comes from candidates whose ARI and NMI rankings differ or that are nearly tied
+(ARI regret at 100 labels: 0.011 and 0.014). Caveats: labeled nodes are drawn uniformly at random, which is optimistic
+for real annotation; regret is scored on all labeled nodes including the m drawn (on AIFB, 100 of 176). Rows:
+[few_label_selection_summary.csv](configs/breakthrough/evidence/few_label_selection_summary.csv),
+[few_label_selection_instances.csv](configs/breakthrough/evidence/few_label_selection_instances.csv).
+
 ### Retired in this pass
 
 | Item | Why |
@@ -451,8 +481,10 @@ per job below `knn_auto_threshold` (20,000 nodes), and four parallel jobs ran ou
 
 1. **Label-free choice between partition generators and models.** Structural entropy prefers the most compressible
    partition, whichever method produced it. Edge cross-validation (E18) removes the self-evaluation advantage but not
-   label misalignment (Photo, Amazon Computers). The feature-gated rule R4 did not validate (E19). Report per-method
-   results, with edge-CV selection as a secondary, modest improvement over in-sample SE (pooled regret 0.026 vs 0.043).
+   label misalignment (Photo, Amazon Computers). The feature-gated rule R4 did not validate (E19). Without labels, report
+   per-method results with edge-CV selection as a modest improvement (pooled regret 0.026 vs 0.043); with 20–50 labeled
+   nodes, few-label selection resolves the choice (E20). Open: non-uniform or actively chosen labels, and combining the
+   edge-CV ranking with labels at budgets below 20.
 2. **Higher-order contexts.** Exhaustive enumeration works but grows combinatorially (349 → 4,837 candidates at order 2
    with 34 context dims); gradients and beams need lower-order signal. A prior on which node attributes can carry context
    (categorical node types or roles) is the practical lever to test.
@@ -537,6 +569,10 @@ done
 .venv/bin/python tools/run_breakthrough.py --plan configs/breakthrough/e17_edge_cv.json --root_path "$DATA" --max_parallel 5
 .venv/bin/python tools/select_partition_rules.py --root_path "$DATA" --spec configs/breakthrough/selection_rules_spec.json \
   --out_dir results/breakthrough_v1/e18_selection_rules
+# E20: few-label selection over the E18/E19 decisions (reuses their checkpoints; caches partitions)
+.venv/bin/python tools/few_label_selection.py --specs configs/breakthrough/selection_rules_spec.json configs/breakthrough/selection_validation_spec.json \
+  --reference results/breakthrough_v1/e18_selection_rules/instances.csv results/breakthrough_v1/e19_selection_validation/rules/instances.csv \
+  --budgets 5,10,20,50,100 --draws 200 --out_dir results/breakthrough_v1/e20_few_label_selection
 # E19: frozen-rule validation on new decisions (search, datasets, two training stages, scoring); 2 jobs per 24 GB GPU
 .venv/bin/python tools/run_selection_validation.py --max_parallel 2 --threads 4 --workers 16
 # E14/E16: write each pick (table in configs/breakthrough/README.md), train, choose decoders

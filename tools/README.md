@@ -15,6 +15,7 @@ The [environment declaration](../UV_ENVIRONMENTS.txt), [dataset guide](../data/R
 | `write_se_reweighted_dataset.py` | Write a search pick as `<name>_edge_weight.npy` next to a copy of the dataset, for training the edge-free DSE on it |
 | `se_select_decoder.py` | For runs on a reweighted graph, compare the DSE assignment with spectral / SGC partitions by two-level SE (`--spectral reg`) |
 | `make_edge_cv_split.py` | Hold out a fraction of undirected edges (no new isolated nodes); writes `<name>_cv80/` and its held-out pairs |
+| `few_label_selection.py` | How many random labeled nodes the choice among candidates needs (ARI on the labeled subset; NMI and ARI regret) |
 | `run_selection_validation.py` | E19 driver: new decisions on Citeseer / Computers / PubMed and seed-1 synthetic graphs, end to end and resumable |
 | `select_partition_rules.py` | Score label-free selection rules (SE, medoid, edge-CV SE, two-view SE, feature-gated edge-CV) on a JSON list of decisions |
 | `report_e2_mechanism.py` | Synthetic edge-information controls and effect tables |
