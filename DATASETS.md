@@ -2,9 +2,10 @@
 
 This file describes the datasets that currently exist under `data/` in this repo, with emphasis on what is actually useful for experiments now.
 
-Updated 2026-10-15. Dataset payloads are not included in Git; see [data/README.md](data/README.md) for construction
-commands and the custom sparse format. E9 covers Cora, Photo, DBLP v2, AIFB and ACM v2; its synthetic jobs remain
-uncompleted. Current comparisons and their evaluation protocol are in [README.md](README.md).
+Updated 2026-10-17. Dataset payloads are not included in Git; see [data/README.md](data/README.md) for construction
+commands and the custom sparse format. E9's 92 runs are complete, including 48 synthetic runs. Later stages add
+XOR contexts, searched/CV graphs and few-label selection through E22; see the [experiment index](configs/breakthrough/README.md).
+Current comparisons and their evaluation protocol are in [README.md](README.md).
 
 > **Location on the original workstation.** `data/` is an fstab bind mount of the D: mirror folder
 > `/mnt/d/WSL Projects Data/home/aitx/workspace/projects/edge-enhanced-unsupervised-graph-neural-network-clustering/data`

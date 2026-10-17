@@ -186,7 +186,7 @@ def main() -> None:
     parser.add_argument("--threads", type=int, default=2, help="CPU threads per job.")
     parser.add_argument("--only_tags", type=str, default="", help="Comma-separated subset of tags to run.")
     parser.add_argument("--num_shards", type=int, default=1, help="Split the expanded job list across machines.")
-    parser.add_argument("--shards", type=str, default="", help="Comma-separated shard ids (job index % num_shards) to run here.")
+    parser.add_argument("--shards", type=str, default="", help="Comma-separated shard ids (job index %% num_shards) to run here.")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry_run", action="store_true")
     args = parser.parse_args()
